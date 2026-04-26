@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Package Manager</title>
+  <link rel="stylesheet" href="styles.css" />
+</head>
+<body>
+  <div class="app">
+
+    <header class="topbar">
+      <span class="logo">📦 Package Manager</span>
+      <nav class="tabs">
+        <button class="tab active" data-tab="search">Search</button>
+        <button class="tab" data-tab="installed">Installed</button>
+      </nav>
+    </header>
+
+    <!-- Search Tab -->
+    <section id="tab-search" class="tab-content active">
+      <div class="search-bar">
+        <input id="search-input" type="text" placeholder="Search for a package…" autocomplete="off" />
+        <button id="search-btn">Search</button>
+      </div>
+      <div id="search-status" class="status-msg"></div>
+      <div id="results-grid" class="results-grid"></div>
+    </section>
+
+    <!-- Installed Tab -->
+    <section id="tab-installed" class="tab-content">
+      <div class="section-header">
+        <h2>Installed Packages</h2>
+        <button id="refresh-btn">Refresh</button>
+      </div>
+      <div id="installed-status" class="status-msg"></div>
+      <table id="installed-table" class="installed-table">
+        <thead>
+          <tr>
+            <th>Package</th>
+            <th>Status</th>
+            <th>Action</th>
+          </tr>
+        </thead>
+        <tbody id="installed-body"></tbody>
+      </table>
+    </section>
+
+  </div>
+
+  <!-- Log modal -->
+  <div id="log-backdrop" class="log-backdrop hidden">
+    <div class="log-modal">
+      <div class="log-header">
+        <span id="log-title">Installing…</span>
+        <button id="log-close" class="log-close" disabled>✕</button>
+      </div>
+      <pre id="log-output" class="log-output"></pre>
+      <div id="log-footer" class="log-footer"></div>
+    </div>
+  </div>
+
+  <script src="main.js" type="module"></script>
+</body>
+</html>

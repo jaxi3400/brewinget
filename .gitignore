@@ -1,0 +1,16 @@
+# Node
+node_modules/
+
+# Rust / Cargo build output
+src-tauri/target/
+
+# Tauri generated files
+src-tauri/gen/
+
+# macOS
+.DS_Store
+
+# Editor
+.vscode/
+.idea/
+*.swp
