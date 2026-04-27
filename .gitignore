@@ -14,3 +14,6 @@ src-tauri/gen/
 .vscode/
 .idea/
 *.swp
+
+# Claude Code
+.claude/
