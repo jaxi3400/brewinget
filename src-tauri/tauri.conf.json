@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Package Manager",
+  "productName": "Brewinget",
   "version": "0.1.0",
-  "identifier": "com.packagemanager.app",
+  "identifier": "com.brewinget.app",
   "build": {
     "frontendDist": "../src"
   },
@@ -10,9 +10,9 @@
     "withGlobalTauri": true,
     "windows": [
       {
-        "title": "Package Manager",
-        "width": 1200,
-        "height": 800,
+        "title": "Brewinget",
+        "width": 1100,
+        "height": 750,
         "minWidth": 900,
         "minHeight": 600
       }
