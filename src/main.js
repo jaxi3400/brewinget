@@ -40,8 +40,8 @@ async function doSearch() {
       searchStatus.textContent = 'No packages found.';
     } else {
       searchStatus.textContent = `${packages.length} result${packages.length === 1 ? '' : 's'} for "${query}"`;
-      packages.forEach(name => {
-        resultsGrid.appendChild(makeCard(name));
+      packages.forEach(pkg => {
+        resultsGrid.appendChild(makeCard(pkg));
       });
     }
   } catch (err) {
@@ -51,14 +51,16 @@ async function doSearch() {
   }
 }
 
-function makeCard(name) {
+function makeCard(pkg) {
   const card = document.createElement('div');
   card.className = 'pkg-card';
   card.innerHTML = `
-    <div class="pkg-name">${escHtml(name)}</div>
+    <div class="pkg-name">${escHtml(pkg.name)}</div>
+    <div class="pkg-id">${escHtml(pkg.id)}</div>
+    ${pkg.version ? `<div class="pkg-meta">${escHtml(pkg.version)}${pkg.source ? ` · ${escHtml(pkg.source)}` : ''}</div>` : ''}
     <button class="install-btn">Install</button>
   `;
-  card.querySelector('.install-btn').addEventListener('click', () => openLog('install', name));
+  card.querySelector('.install-btn').addEventListener('click', () => openLog('install', pkg.id));
   return card;
 }
 
@@ -67,46 +69,81 @@ function makeCard(name) {
 const installedBody   = document.getElementById('installed-body');
 const installedStatus = document.getElementById('installed-status');
 const refreshBtn      = document.getElementById('refresh-btn');
+const installedFilter = document.getElementById('installed-filter');
+const showArpToggle   = document.getElementById('show-arp-toggle');
+
+let allInstalled = [];
 
 refreshBtn.addEventListener('click', loadInstalled);
+installedFilter.addEventListener('input', renderInstalled);
+showArpToggle.addEventListener('change', renderInstalled);
 
 async function loadInstalled() {
   refreshBtn.disabled = true;
   installedStatus.textContent = 'Loading…';
   installedBody.innerHTML = '';
+  installedFilter.value = '';
 
   try {
-    const packages = await invoke('list_installed');
-
-    installedStatus.textContent = `${packages.length} package${packages.length === 1 ? '' : 's'} installed`;
-
-    packages.forEach(pkg => {
-      const row = document.createElement('tr');
-      row.innerHTML = `
-        <td>${escHtml(pkg.name)}</td>
-        <td>${
-          pkg.hasUpdate
-            ? '<span class="badge badge-update">⚠ Update available</span>'
-            : '<span class="badge badge-ok">✓ Up to date</span>'
-        }</td>
-        <td>${
-          pkg.hasUpdate
-            ? `<button class="btn-update" data-pkg="${escHtml(pkg.name)}">Update</button>`
-            : '—'
-        }</td>
-      `;
-      installedBody.appendChild(row);
-    });
-
-    // Wire up update buttons
-    installedBody.querySelectorAll('.btn-update').forEach(btn => {
-      btn.addEventListener('click', () => openLog('update', btn.dataset.pkg));
-    });
+    allInstalled = await invoke('list_installed');
+    renderInstalled();
   } catch (err) {
     installedStatus.textContent = `Error: ${err}`;
   } finally {
     refreshBtn.disabled = false;
   }
+}
+
+function renderInstalled() {
+  const showArp    = showArpToggle.checked;
+  const filterText = installedFilter.value.trim().toLowerCase();
+
+  let packages = showArp ? allInstalled : allInstalled.filter(pkg => !pkg.isArp);
+
+  if (filterText) {
+    packages = packages.filter(pkg =>
+      pkg.name.toLowerCase().includes(filterText) ||
+      pkg.id.toLowerCase().includes(filterText)
+    );
+  }
+
+  // Updates at top, then alphabetical by name
+  packages = [...packages].sort((a, b) => {
+    if (a.hasUpdate !== b.hasUpdate) return a.hasUpdate ? -1 : 1;
+    return a.name.localeCompare(b.name);
+  });
+
+  const total   = packages.length;
+  const updates = packages.filter(p => p.hasUpdate).length;
+  installedStatus.textContent = total === 0 && filterText
+    ? 'No packages match your filter.'
+    : `${total} package${total === 1 ? '' : 's'}${updates ? ` · ${updates} update${updates === 1 ? '' : 's'} available` : ''}`;
+
+  installedBody.innerHTML = '';
+  packages.forEach(pkg => {
+    const row = document.createElement('tr');
+    row.innerHTML = `
+      <td>
+        <div class="pkg-name">${escHtml(pkg.name)}</div>
+        <div class="pkg-id">${escHtml(pkg.id)}</div>
+      </td>
+      <td>${
+        pkg.hasUpdate
+          ? '<span class="badge badge-update">⚠ Update available</span>'
+          : '<span class="badge badge-ok">✓ Up to date</span>'
+      }</td>
+      <td>${
+        pkg.hasUpdate
+          ? `<button class="btn-update" data-pkg="${escHtml(pkg.id)}">Update</button>`
+          : '—'
+      }</td>
+    `;
+    installedBody.appendChild(row);
+  });
+
+  installedBody.querySelectorAll('.btn-update').forEach(btn => {
+    btn.addEventListener('click', () => openLog('update', btn.dataset.pkg));
+  });
 }
 
 // ── Log modal ────────────────────────────────────────────────────────────────

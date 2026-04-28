@@ -3,14 +3,14 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>Package Manager</title>
+  <title>Brewinget</title>
   <link rel="stylesheet" href="styles.css" />
 </head>
 <body>
   <div class="app">
 
     <header class="topbar">
-      <span class="logo">📦 Package Manager</span>
+      <span class="logo">🍺 Brewinget</span>
       <nav class="tabs">
         <button class="tab active" data-tab="search">Search</button>
         <button class="tab" data-tab="installed">Installed</button>
@@ -32,6 +32,13 @@
       <div class="section-header">
         <h2>Installed Packages</h2>
         <button id="refresh-btn">Refresh</button>
+      </div>
+      <div class="installed-toolbar">
+        <input id="installed-filter" type="text" placeholder="Filter packages…" autocomplete="off" />
+        <label class="toggle-label">
+          <input type="checkbox" id="show-arp-toggle" />
+          Show all detected programs
+        </label>
       </div>
       <div id="installed-status" class="status-msg"></div>
       <table id="installed-table" class="installed-table">
