@@ -247,6 +247,9 @@ button:disabled { opacity: 0.35; cursor: not-allowed; }
 
 #installed-status { margin-bottom: 16px; }
 
+/* ── Section actions ── */
+.section-actions { display: flex; align-items: center; gap: 10px; }
+
 /* ── Installed toolbar ── */
 .installed-toolbar {
   display: flex;
@@ -300,19 +303,55 @@ button:disabled { opacity: 0.35; cursor: not-allowed; }
 }
 .installed-table th,
 .installed-table td {
-  padding: 12px 16px;
+  padding: 11px 16px;
   text-align: left;
   border-bottom: 1px solid var(--border);
 }
 .installed-table th {
+  position: sticky;
+  top: 0;
+  background: var(--bg);
   color: var(--muted);
   font-weight: 500;
   font-size: 12px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
+  z-index: 1;
+  box-shadow: 0 1px 0 var(--border);
 }
 .installed-table tr { transition: background 0.12s; }
-.installed-table tr:hover td { background: #202020; }
+.installed-table tr:hover td { background: #1a1a1a; }
+.installed-table tr.skel-row:hover td { background: transparent; }
+
+/* ── Version cell ── */
+.version-cell {
+  white-space: nowrap;
+  font-family: "SF Mono", "Fira Code", monospace;
+  font-size: 12px;
+}
+.pkg-version { color: var(--muted); }
+.pkg-version.muted { opacity: 0.4; }
+.version-arrow {
+  display: block;
+  color: var(--warning);
+  font-size: 11px;
+  margin-top: 2px;
+}
+
+/* ── "Update All" button ── */
+.btn-update-all {
+  background: linear-gradient(135deg, #92400e 0%, #78350f 100%);
+  border: 1px solid #92400e88;
+  color: var(--warning);
+  font-size: 13px;
+  padding: 7px 16px;
+  box-shadow: 0 1px 4px rgba(120,53,15,0.3);
+}
+.btn-update-all:hover:not(:disabled) {
+  background: linear-gradient(135deg, #b45309 0%, #92400e 100%);
+  box-shadow: 0 2px 10px rgba(120,53,15,0.5);
+  color: #fff;
+}
 
 .badge {
   display: inline-flex;

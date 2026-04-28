@@ -2,10 +2,9 @@ use std::os::windows::process::CommandExt;
 use std::process::{Command, Stdio};
 use tauri::Emitter;
 
-// Prevents a black console window from flashing when we spawn cmd.exe
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
-// winget.exe is an "app execution alias" that doesn't work reliably when spawned
+// winget.exe is an app execution alias that doesn't work reliably when spawned
 // from a GUI process without a console. Routing through cmd /c is the fix.
 fn winget(args: &[&str]) -> Command {
     let mut cmd = Command::new("cmd");
@@ -17,19 +16,35 @@ fn winget(args: &[&str]) -> Command {
     cmd
 }
 
-pub fn search_packages(query: String) -> Result<Vec<String>, String> {
+// ── Public commands ───────────────────────────────────────────────────────────
+
+pub fn search_packages(query: String) -> Result<Vec<serde_json::Value>, String> {
     let output = winget(&["search", &query, "--accept-source-agreements"])
         .output()
         .map_err(|e| format!("Failed to run winget: {}", e))?;
 
-    // Include stderr in the error so the UI shows a useful message on failure
     if !output.status.success() && output.stdout.is_empty() {
         let err = String::from_utf8_lossy(&output.stderr);
         return Err(format!("winget error: {}", err.trim()));
     }
 
     let stdout = String::from_utf8_lossy(&output.stdout);
-    Ok(parse_table_ids(&stdout).into_iter().take(24).collect())
+    let rows = parse_table(&stdout);
+
+    let packages: Vec<serde_json::Value> = rows
+        .into_iter()
+        .take(30)
+        .map(|r| {
+            serde_json::json!({
+                "name":    r.name,
+                "id":      r.id,
+                "version": r.version,
+                "source":  r.source,
+            })
+        })
+        .collect();
+
+    Ok(packages)
 }
 
 pub fn install_package(app_handle: tauri::AppHandle, package: String) {
@@ -66,11 +81,7 @@ pub fn list_installed() -> Result<Vec<serde_json::Value>, String> {
         .output()
         .map_err(|e| e.to_string())?;
 
-    let all = parse_table_ids(&String::from_utf8_lossy(&all_out.stdout));
-    let upgradeable: std::collections::HashSet<String> =
-        parse_table_ids(&String::from_utf8_lossy(&upgrade_out.stdout))
-            .into_iter()
-            .collect();
+    let all = parse_table(&String::from_utf8_lossy(&all_out.stdout));
 
     if all.is_empty() {
         let err = String::from_utf8_lossy(&all_out.stderr);
@@ -79,13 +90,56 @@ pub fn list_installed() -> Result<Vec<serde_json::Value>, String> {
         }
     }
 
+    // Map id -> available version from the upgrade output.
+    let upgradeable: std::collections::HashMap<String, String> = parse_table(
+        &String::from_utf8_lossy(&upgrade_out.stdout),
+    )
+    .into_iter()
+    .filter(|r| !r.id.is_empty())
+    .map(|r| (r.id, r.available))
+    .collect();
+
     Ok(all
         .into_iter()
-        .map(|id| {
-            let has_update = upgradeable.contains(&id);
-            serde_json::json!({ "name": id, "hasUpdate": has_update })
+        .map(|r| {
+            let available  = upgradeable.get(&r.id).cloned().unwrap_or_default();
+            let has_update = !available.is_empty();
+            // ARP entries are Windows Add/Remove Programs registry entries;
+            // they can't be managed through winget so we flag them for filtering.
+            let is_arp = r.id.starts_with("ARP\\");
+            serde_json::json!({
+                "name":      r.name,
+                "id":        r.id,
+                "version":   r.version,
+                "available": available,
+                "hasUpdate": has_update,
+                "isArp":     is_arp,
+            })
         })
         .collect())
+}
+
+pub fn update_all_packages(app_handle: tauri::AppHandle) {
+    std::thread::spawn(move || {
+        match winget(&[
+            "upgrade",
+            "--all",
+            "--accept-package-agreements",
+            "--accept-source-agreements",
+        ])
+        .stdout(Stdio::piped())
+        .stderr(Stdio::piped())
+        .spawn()
+        {
+            Ok(child) => crate::run_streamed(app_handle, child),
+            Err(e) => {
+                app_handle
+                    .emit("install-output", format!("Error: {}", e))
+                    .ok();
+                app_handle.emit("install-complete", "error").ok();
+            }
+        }
+    });
 }
 
 pub fn update_package(app_handle: tauri::AppHandle, package: String) {
@@ -113,20 +167,34 @@ pub fn update_package(app_handle: tauri::AppHandle, package: String) {
     });
 }
 
-// Parse the fixed-width table that winget outputs for `search`, `list`, and `upgrade`.
-// Finds the "Id" column by its header position and extracts that field from each data row.
-fn parse_table_ids(output: &str) -> Vec<String> {
-    let mut id_col: Option<usize> = None;
-    let mut version_col: Option<usize> = None;
-    let mut past_separator = false;
-    let mut results = Vec::new();
+// ── Table parser ──────────────────────────────────────────────────────────────
 
-    for raw_line in output.lines() {
-        // winget uses \r to animate a progress spinner in-place. When stdout is
-        // piped, all spinner frames land on the same \n-delimited line. Taking
-        // the last \r-segment gives us the final visible content (header or data).
-        let raw_line = raw_line.trim_start_matches('\u{feff}');
-        let line = raw_line.rsplit('\r').next().unwrap_or(raw_line);
+struct TableRow {
+    name:      String,
+    id:        String,
+    version:   String,
+    available: String,
+    source:    String,
+}
+
+/// Parse any winget fixed-width table (search / list / upgrade).
+///
+/// winget uses \r to animate a spinner in-place; when stdout is piped all
+/// spinner frames land on the same \n-delimited line.  `rsplit('\r').next()`
+/// gives us the last overwrite — the actual header or data row.
+fn parse_table(output: &str) -> Vec<TableRow> {
+    // Column start positions discovered from the header line.
+    let mut col_name:      Option<usize> = None;
+    let mut col_id:        Option<usize> = None;
+    let mut col_version:   Option<usize> = None;
+    let mut col_available: Option<usize> = None;
+    let mut col_source:    Option<usize> = None;
+    let mut past_separator = false;
+    let mut rows = Vec::new();
+
+    for raw in output.lines() {
+        let raw = raw.trim_start_matches('\u{feff}');
+        let line = raw.rsplit('\r').next().unwrap_or(raw);
         let trimmed = line.trim();
 
         if trimmed.is_empty() {
@@ -134,15 +202,17 @@ fn parse_table_ids(output: &str) -> Vec<String> {
         }
 
         if !past_separator {
-            // The header line contains both "Id" and at least one of "Name" / "Version"
+            // Detect the header line by the presence of both "Id" and "Name"/"Version"
             if trimmed.contains("Id")
                 && (trimmed.contains("Name") || trimmed.contains("Version"))
             {
-                id_col = line.find("Id");
-                version_col = line.find("Version");
+                col_name      = line.find("Name");
+                col_id        = line.find("Id");
+                col_version   = line.find("Version");
+                col_available = line.find("Available");
+                col_source    = line.find("Source");
                 continue;
             }
-            // The separator is a run of dashes (nothing else)
             if trimmed.len() > 5 && trimmed.chars().all(|c| c == '-') {
                 past_separator = true;
                 continue;
@@ -150,27 +220,34 @@ fn parse_table_ids(output: &str) -> Vec<String> {
             continue;
         }
 
-        // Data row — slice the Id column out by character position
-        if let Some(id_start) = id_col {
-            let chars: Vec<char> = line.chars().collect();
-            let len = chars.len();
+        let Some(id_start) = col_id else { continue };
+        let chars: Vec<char> = line.chars().collect();
+        let len = chars.len();
+        if id_start >= len {
+            continue;
+        }
 
-            if id_start >= len {
-                continue;
-            }
+        let name      = col_str(&chars, len, col_name.unwrap_or(0),      id_start);
+        let id        = col_str(&chars, len, id_start,                   col_version.unwrap_or(len));
+        let version   = col_str(&chars, len, col_version.unwrap_or(0),   col_available.or(col_source).unwrap_or(len));
+        let available = col_str(&chars, len, col_available.unwrap_or(0), col_source.unwrap_or(len));
+        let source    = col_str(&chars, len, col_source.unwrap_or(0),    len);
 
-            let id_end = version_col.unwrap_or(len).min(len);
-            let id: String = chars[id_start..id_end]
-                .iter()
-                .collect::<String>()
-                .trim()
-                .to_string();
-
-            if !id.is_empty() {
-                results.push(id);
-            }
+        if !id.is_empty() {
+            rows.push(TableRow { name, id, version, available, source });
         }
     }
 
-    results
+    rows
+}
+
+fn col_str(chars: &[char], total: usize, start: usize, end: usize) -> String {
+    if start >= total {
+        return String::new();
+    }
+    chars[start..end.min(total)]
+        .iter()
+        .collect::<String>()
+        .trim()
+        .to_string()
 }

@@ -41,7 +41,10 @@
     <section id="tab-installed" class="tab-content">
       <div class="section-header">
         <h2>Installed Packages</h2>
-        <button id="refresh-btn">Refresh</button>
+        <div class="section-actions">
+          <button id="update-all-btn" class="btn-update-all hidden">Update All</button>
+          <button id="refresh-btn">Refresh</button>
+        </div>
       </div>
       <div class="installed-toolbar">
         <input id="installed-filter" type="text" placeholder="Filter packages…" autocomplete="off" />
@@ -55,6 +58,7 @@
         <thead>
           <tr>
             <th>Package</th>
+            <th>Version</th>
             <th>Status</th>
             <th>Action</th>
           </tr>

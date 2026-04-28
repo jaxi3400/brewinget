@@ -72,7 +72,7 @@ pub(crate) fn run_streamed(app_handle: tauri::AppHandle, mut child: std::process
 // ── Tauri commands ───────────────────────────────────────────────────────────
 
 #[tauri::command]
-fn search_packages(query: String) -> Result<Vec<String>, String> {
+fn search_packages(query: String) -> Result<Vec<serde_json::Value>, String> {
     pm::search_packages(query)
 }
 
@@ -91,6 +91,11 @@ fn update_package(app_handle: tauri::AppHandle, package: String) {
     pm::update_package(app_handle, package);
 }
 
+#[tauri::command]
+fn update_all_packages(app_handle: tauri::AppHandle) {
+    pm::update_all_packages(app_handle);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -99,6 +104,7 @@ pub fn run() {
             install_package,
             list_installed,
             update_package,
+            update_all_packages,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

@@ -118,28 +118,50 @@ function makeCard(pkg) {
 const installedBody   = document.getElementById('installed-body');
 const installedStatus = document.getElementById('installed-status');
 const refreshBtn      = document.getElementById('refresh-btn');
+const updateAllBtn    = document.getElementById('update-all-btn');
 const installedFilter = document.getElementById('installed-filter');
 const showArpToggle   = document.getElementById('show-arp-toggle');
 
 let allInstalled = [];
 
 refreshBtn.addEventListener('click', loadInstalled);
+updateAllBtn.addEventListener('click', () => openLog('update-all', '--all'));
 installedFilter.addEventListener('input', renderInstalled);
 showArpToggle.addEventListener('change', renderInstalled);
 
 async function loadInstalled() {
   refreshBtn.disabled = true;
+  updateAllBtn.classList.add('hidden');
   installedStatus.textContent = 'Loading…';
-  installedBody.innerHTML = '';
   installedFilter.value = '';
+  showInstalledSkeletons(12);
 
   try {
     allInstalled = await invoke('list_installed');
     renderInstalled();
   } catch (err) {
+    installedBody.innerHTML = '';
     installedStatus.textContent = `Error: ${err}`;
   } finally {
     refreshBtn.disabled = false;
+  }
+}
+
+function showInstalledSkeletons(n) {
+  installedBody.innerHTML = '';
+  for (let i = 0; i < n; i++) {
+    const row = document.createElement('tr');
+    row.className = 'skel-row';
+    row.innerHTML = `
+      <td>
+        <div class="skel skel-name" style="width:${55 + (i % 4) * 10}%"></div>
+        <div class="skel skel-id"   style="width:${35 + (i % 3) * 8}%"></div>
+      </td>
+      <td><div class="skel" style="height:13px;width:56px;border-radius:3px"></div></td>
+      <td><div class="skel" style="height:20px;width:72px;border-radius:20px"></div></td>
+      <td></td>
+    `;
+    installedBody.appendChild(row);
   }
 }
 
@@ -164,18 +186,35 @@ function renderInstalled() {
 
   const total   = packages.length;
   const updates = packages.filter(p => p.hasUpdate).length;
+
   installedStatus.textContent = total === 0 && filterText
     ? 'No packages match your filter.'
     : `${total} package${total === 1 ? '' : 's'}${updates ? ` · ${updates} update${updates === 1 ? '' : 's'} available` : ''}`;
 
+  // Show/hide "Update All" only when there are ≥2 pending updates and no filter active
+  if (updates >= 2 && !filterText) {
+    updateAllBtn.textContent = `Update All (${updates})`;
+    updateAllBtn.classList.remove('hidden');
+  } else {
+    updateAllBtn.classList.add('hidden');
+  }
+
   installedBody.innerHTML = '';
   packages.forEach(pkg => {
     const row = document.createElement('tr');
+    const versionHtml = pkg.version
+      ? `<span class="pkg-version">${escHtml(pkg.version)}</span>`
+      : '<span class="pkg-version muted">—</span>';
+    const availableHtml = pkg.hasUpdate && pkg.available
+      ? `<span class="version-arrow">→ ${escHtml(pkg.available)}</span>`
+      : '';
+
     row.innerHTML = `
       <td>
         <div class="pkg-name">${escHtml(pkg.name)}</div>
         <div class="pkg-id">${escHtml(pkg.id)}</div>
       </td>
+      <td class="version-cell">${versionHtml}${availableHtml}</td>
       <td>${
         pkg.hasUpdate
           ? '<span class="badge badge-update">⚠ Update available</span>'
@@ -184,7 +223,7 @@ function renderInstalled() {
       <td>${
         pkg.hasUpdate
           ? `<button class="btn-update" data-pkg="${escHtml(pkg.id)}">Update</button>`
-          : '—'
+          : ''
       }</td>
     `;
     installedBody.appendChild(row);
@@ -211,7 +250,9 @@ logClose.addEventListener('click', closeLog);
 async function openLog(action, pkgName) {
   logOutput.textContent = '';
   logFooter.innerHTML = '<div class="spinner"></div> <span>Running…</span>';
-  logTitle.textContent = action === 'update' ? `Updating: ${pkgName}` : `Installing: ${pkgName}`;
+  logTitle.textContent = action === 'update-all' ? 'Updating all packages…'
+    : action === 'update' ? `Updating: ${pkgName}`
+    : `Installing: ${pkgName}`;
   logClose.disabled = true;
   logBackdrop.classList.remove('hidden');
 
@@ -239,7 +280,9 @@ async function openLog(action, pkgName) {
 
   // Kick off the Rust command
   try {
-    if (action === 'update') {
+    if (action === 'update-all') {
+      await invoke('update_all_packages');
+    } else if (action === 'update') {
       await invoke('update_package', { package: pkgName });
     } else {
       await invoke('install_package', { package: pkgName });
