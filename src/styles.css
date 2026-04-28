@@ -1,44 +1,55 @@
 *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
 
 :root {
-  /* Elevation — 4 levels, each ~6% lighter, all with a purple/blue tint */
-  --bg:       #0d0d12;   /* L0: app background */
-  --surface:  #13131c;   /* L1: topbar, table sticky header */
-  --card:     #1a1a26;   /* L2: cards, inputs, modal */
-  --hover:    #21212f;   /* L3: hover state */
+  /* Aurora base */
+  --bg-base:  #06060d;
 
-  /* Borders — semi-transparent white: defined against any elevation */
-  --border:   rgba(255,255,255,0.08);
-  --border-h: rgba(255,255,255,0.15);
+  /* Glass panel colours — semi-transparent so the aurora bleeds through */
+  --surface:  rgba(8, 8, 16, 0.78);
+  --card:     rgba(8, 8, 16, 0.52);
+  --hover:    rgba(20, 18, 36, 0.68);
 
-  /* Accent — indigo */
+  /* Opaque dark reference (used where backdrop-filter isn't helpful) */
+  --bg: #08080f;
+
+  /* Borders */
+  --border:   rgba(255,255,255,0.10);
+  --border-h: rgba(255,255,255,0.20);
+
+  /* Accent */
   --accent:      #6366f1;
   --accent-h:    #818cf8;
-  --accent-dim:  rgba(99,102,241,0.13);
-  --accent-glow: rgba(99,102,241,0.22);
+  --accent-dim:  rgba(99,102,241,0.15);
+  --accent-glow: rgba(99,102,241,0.28);
 
   /* Semantic */
-  --success: #34d399;   /* teal-green: calmer than bright lime */
+  --success: #34d399;
   --warning: #fbbf24;
   --error:   #f87171;
 
-  /* Text — white at descending opacity */
-  --text:   rgba(255,255,255,0.95);   /* primary content */
-  --text-2: rgba(255,255,255,0.65);   /* labels, secondary info */
-  --muted:  rgba(255,255,255,0.40);   /* placeholders, disabled */
+  /* Text hierarchy */
+  --text:   rgba(255,255,255,0.95);
+  --text-2: rgba(255,255,255,0.65);
+  --muted:  rgba(255,255,255,0.40);
 
-  /* Shadows */
-  --shadow-sm: 0 1px 3px rgba(0,0,0,0.5);
-  --shadow-md: 0 4px 24px rgba(0,0,0,0.45);
-  --shadow-lg: 0 24px 60px rgba(0,0,0,0.7);
+  /* Shadows — deeper because they contrast against the aurora glow */
+  --shadow-sm: 0 1px 4px rgba(0,0,0,0.6);
+  --shadow-md: 0 4px 28px rgba(0,0,0,0.55);
+  --shadow-lg: 0 24px 64px rgba(0,0,0,0.80);
 
   --radius: 10px;
 }
 
+/* ══ Aurora background ════════════════════════════════════════════════════════
+   Three layers:
+     ::before — the coloured blobs, pushed outside the viewport so filter:blur
+                doesn't clip dark edges at the boundary
+     ::after  — a near-black veil that dials everything back to "moody at night"
+     body bg  — the true base colour, painted below both pseudo-elements
+   ══════════════════════════════════════════════════════════════════════════ */
+
 body {
-  background-color: var(--bg);
-  /* Ambient glow — subtle accent bloom from the top-left corner */
-  background-image: radial-gradient(ellipse 80% 50% at 10% 0%, rgba(99,102,241,0.07) 0%, transparent 65%);
+  background-color: var(--bg-base);
   color: var(--text);
   font-family: -apple-system, BlinkMacSystemFont, "Segoe UI Variable", "Segoe UI", Roboto, sans-serif;
   font-size: 14px;
@@ -47,24 +58,59 @@ body {
   overflow: hidden;
   display: flex;
   flex-direction: column;
+  position: relative; /* establishes stacking context for ::before/::after */
+}
+
+/* Aurora blobs — extend 250px past every edge so blur doesn't get clipped */
+body::before {
+  content: '';
+  position: fixed;
+  top: -250px; left: -250px; right: -250px; bottom: -250px;
+  z-index: -2;
+  background-image:
+    /* Deep purple — top-left anchor */
+    radial-gradient(ellipse 55% 55% at 28%  28%, rgba(125, 28, 218, 0.75) 0%, transparent 68%),
+    /* Magenta — top-right counter-point */
+    radial-gradient(ellipse 48% 52% at 76%  14%, rgba(210, 28, 118, 0.62) 0%, transparent 68%),
+    /* Midnight blue — bottom-right anchor */
+    radial-gradient(ellipse 60% 55% at 82%  80%, rgba(16,  20, 172, 0.72) 0%, transparent 68%),
+    /* Warm rust — bottom-left, subtler */
+    radial-gradient(ellipse 44% 44% at 12%  86%, rgba(192, 54,  14, 0.50) 0%, transparent 65%),
+    /* Soft centre violet — ties the blobs together */
+    radial-gradient(ellipse 38% 42% at 50%  50%, rgba(92,  16, 164, 0.40) 0%, transparent 62%);
+  filter: blur(80px);
+}
+
+/* Dark veil — makes cards readable; reduce opacity to let more aurora through */
+body::after {
+  content: '';
+  position: fixed;
+  inset: 0;
+  z-index: -1;
+  background: rgba(0, 0, 0, 0.58);
+  pointer-events: none;
 }
 
 /* ── Scrollbars ── */
 ::-webkit-scrollbar              { width: 6px; }
 ::-webkit-scrollbar-track        { background: transparent; }
-::-webkit-scrollbar-thumb        { background: rgba(255,255,255,0.12); border-radius: 3px; }
-::-webkit-scrollbar-thumb:hover  { background: rgba(255,255,255,0.2); }
+::-webkit-scrollbar-thumb        { background: rgba(255,255,255,0.14); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover  { background: rgba(255,255,255,0.24); }
 
-/* ── Top bar ── */
+/* ── Top bar — frosted glass ── */
 .topbar {
   display: flex;
   align-items: center;
   gap: 24px;
   padding: 14px 24px;
-  background: linear-gradient(180deg, var(--surface) 0%, rgba(19,19,28,0.9) 100%);
+  background: var(--surface);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border-bottom: 1px solid var(--border);
-  box-shadow: 0 1px 0 rgba(99,102,241,0.1);
+  box-shadow: 0 1px 0 rgba(99,102,241,0.12);
   flex-shrink: 0;
+  position: relative; /* keep above ::after */
+  z-index: 2;
 }
 
 .logo { font-size: 16px; font-weight: 600; color: var(--text); }
@@ -81,7 +127,7 @@ body {
   font-size: 14px;
   transition: background 0.2s ease, color 0.2s ease;
 }
-.tab:hover  { background: var(--card); color: var(--text); }
+.tab:hover  { background: rgba(255,255,255,0.07); color: var(--text); }
 .tab.active { background: var(--accent); color: #fff; }
 
 /* ── Tab content ── */
@@ -92,6 +138,7 @@ body {
   flex: 1;
   overflow-y: auto;
   padding: 24px;
+  /* No background — transparent so the aurora shows through */
 }
 .tab-content.active {
   display: block;
@@ -112,6 +159,8 @@ body {
 .search-bar input {
   flex: 1;
   background: var(--card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text);
@@ -136,11 +185,11 @@ button {
   font-size: 14px;
   padding: 10px 20px;
   transition: background 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
-  box-shadow: 0 1px 4px rgba(99,102,241,0.3);
+  box-shadow: 0 1px 4px rgba(99,102,241,0.35);
 }
 button:hover:not(:disabled) {
   background: linear-gradient(135deg, var(--accent-h) 0%, var(--accent) 100%);
-  box-shadow: 0 2px 12px rgba(99,102,241,0.45);
+  box-shadow: 0 2px 14px rgba(99,102,241,0.50);
 }
 button:active:not(:disabled) { transform: scale(0.97); }
 button:disabled               { opacity: 0.35; cursor: not-allowed; }
@@ -156,7 +205,7 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
   min-height: 18px;
 }
 
-/* ── Search toolbar (status + MS Store toggle) ── */
+/* ── Search toolbar ── */
 .search-toolbar {
   display: flex;
   align-items: center;
@@ -175,13 +224,8 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
   padding: 80px 24px;
   text-align: center;
 }
-.empty-title {
-  font-size: 16px;
-  font-weight: 500;
-  color: var(--text);
-  margin-bottom: 8px;
-}
-.empty-sub { font-size: 13px; color: var(--muted); }
+.empty-title { font-size: 16px; font-weight: 500; color: var(--text);  margin-bottom: 8px; }
+.empty-sub   { font-size: 13px;                    color: var(--muted); }
 
 /* ── Results grid ── */
 .results-grid {
@@ -190,8 +234,11 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
   gap: 14px;
 }
 
+/* ── Package cards — frosted glass ── */
 .pkg-card {
-  background: linear-gradient(160deg, var(--hover) 0%, var(--card) 100%);
+  background: var(--card);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   padding: 18px;
@@ -199,10 +246,12 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
   flex-direction: column;
   gap: 10px;
   box-shadow: var(--shadow-md);
-  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease;
+  transition: border-color 0.2s ease, transform 0.2s ease, box-shadow 0.2s ease,
+              background 0.2s ease;
 }
 .pkg-card:hover {
-  border-color: var(--accent);
+  background: var(--hover);
+  border-color: rgba(99,102,241,0.45);
   transform: translateY(-2px);
   box-shadow: var(--shadow-md), 0 0 0 1px var(--accent-dim);
 }
@@ -243,9 +292,9 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
   border-radius: 20px;
   letter-spacing: 0.02em;
 }
-.source-winget  { background: rgba(30,58,95,0.35);  color: #60a5fa; border: 1px solid rgba(30,58,95,0.6);  }
-.source-msstore { background: rgba(45,26,95,0.35);  color: #a78bfa; border: 1px solid rgba(76,29,149,0.6); }
-.source-brew    { background: rgba(26,58,30,0.35);  color: #34d399; border: 1px solid rgba(20,83,45,0.6);  }
+.source-winget  { background: rgba(30,58,95,0.40);  color: #60a5fa; border: 1px solid rgba(30,58,95,0.70);  }
+.source-msstore { background: rgba(45,26,95,0.40);  color: #a78bfa; border: 1px solid rgba(76,29,149,0.70); }
+.source-brew    { background: rgba(26,58,30,0.40);  color: #34d399; border: 1px solid rgba(20,83,45,0.70);  }
 
 /* ── Skeleton loading ── */
 @keyframes shimmer {
@@ -254,7 +303,10 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
 }
 .skel {
   border-radius: 4px;
-  background: linear-gradient(90deg, rgba(255,255,255,0.05) 25%, rgba(255,255,255,0.09) 50%, rgba(255,255,255,0.05) 75%);
+  background: linear-gradient(90deg,
+    rgba(255,255,255,0.06) 25%,
+    rgba(255,255,255,0.11) 50%,
+    rgba(255,255,255,0.06) 75%);
   background-size: 1200px 100%;
   animation: shimmer 1.6s infinite linear;
 }
@@ -285,6 +337,8 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
 .installed-toolbar input[type="text"] {
   flex: 1;
   background: var(--card);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border);
   border-radius: var(--radius);
   color: var(--text);
@@ -335,10 +389,14 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
   text-align: left;
   border-bottom: 1px solid var(--border);
 }
+
+/* Sticky header — frosted glass so rows blur through it as they scroll under */
 .installed-table th {
   position: sticky;
   top: 0;
-  background: var(--bg);
+  background: rgba(6, 6, 14, 0.82);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
   color: var(--text-2);
   font-weight: 500;
   font-size: 12px;
@@ -348,13 +406,14 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
   box-shadow: 0 1px 0 var(--border);
   transition: color 0.2s ease;
 }
-.installed-table th[data-sort] { cursor: pointer; user-select: none; }
-.installed-table th[data-sort]:hover { color: var(--text); }
-.installed-table th.sort-active { color: var(--accent); }
+.installed-table th[data-sort]        { cursor: pointer; user-select: none; }
+.installed-table th[data-sort]:hover  { color: var(--text); }
+.installed-table th.sort-active       { color: var(--accent); }
 .sort-ind { font-size: 10px; opacity: 0.8; }
+
 .installed-table tr { transition: background 0.2s ease; }
-.installed-table tr:hover td              { background: rgba(255,255,255,0.03); }
-.installed-table tr.skel-row:hover td    { background: transparent; }
+.installed-table tr:hover td           { background: rgba(255,255,255,0.04); }
+.installed-table tr.skel-row:hover td  { background: transparent; }
 
 /* ── Version cell ── */
 .version-cell {
@@ -375,8 +434,8 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
   padding: 3px 10px;
   border-radius: 20px;
 }
-.badge-ok     { background: rgba(52,211,153,0.1);  color: var(--success); border: 1px solid rgba(52,211,153,0.2); }
-.badge-update { background: rgba(251,191,36,0.1);  color: var(--warning); border: 1px solid rgba(251,191,36,0.2); }
+.badge-ok     { background: rgba(52,211,153,0.12); color: var(--success); border: 1px solid rgba(52,211,153,0.22); }
+.badge-update { background: rgba(251,191,36,0.12); color: var(--warning); border: 1px solid rgba(251,191,36,0.22); }
 
 /* ── Update / Update All buttons ── */
 .btn-update {
@@ -386,10 +445,12 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
   font-size: 12px;
   padding: 5px 12px;
   transition: background 0.2s ease, border-color 0.2s ease, transform 0.1s ease;
+  box-shadow: none;
 }
 .btn-update:hover:not(:disabled) {
   background: rgba(251,191,36,0.18);
-  border-color: rgba(251,191,36,0.5);
+  border-color: rgba(251,191,36,0.50);
+  box-shadow: none;
 }
 .btn-update:active:not(:disabled) { transform: scale(0.97); }
 
@@ -399,21 +460,21 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
   color: var(--warning);
   font-size: 13px;
   padding: 7px 16px;
-  box-shadow: 0 1px 4px rgba(120,53,15,0.35);
+  box-shadow: 0 1px 6px rgba(120,53,15,0.4);
 }
 .btn-update-all:hover:not(:disabled) {
   background: linear-gradient(135deg, #b45309 0%, #92400e 100%);
-  box-shadow: 0 2px 12px rgba(120,53,15,0.55);
+  box-shadow: 0 2px 14px rgba(120,53,15,0.6);
   color: #fff;
 }
 
-/* ── Log modal ── */
+/* ── Log modal — heavily frosted, more opaque so text is crisp ── */
 .log-backdrop {
   position: fixed;
   inset: 0;
-  background: rgba(0,0,0,0.65);
-  backdrop-filter: blur(4px);
-  -webkit-backdrop-filter: blur(4px);
+  background: rgba(0,0,0,0.55);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
   display: flex;
   align-items: center;
   justify-content: center;
@@ -422,7 +483,9 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
 .log-backdrop.hidden { display: none; }
 
 .log-modal {
-  background: var(--card);
+  background: rgba(6, 6, 14, 0.88);
+  backdrop-filter: blur(32px);
+  -webkit-backdrop-filter: blur(32px);
   border: 1px solid var(--border);
   border-radius: 14px;
   width: min(720px, 90vw);
@@ -430,7 +493,7 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
   display: flex;
   flex-direction: column;
   overflow: hidden;
-  box-shadow: var(--shadow-lg);
+  box-shadow: var(--shadow-lg), 0 0 0 1px rgba(255,255,255,0.06);
 }
 
 .log-header {
@@ -453,7 +516,7 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
   transition: background 0.2s ease, color 0.2s ease;
 }
 .log-close:hover:not(:disabled) {
-  background: var(--hover);
+  background: rgba(255,255,255,0.08);
   color: var(--text);
   box-shadow: none;
 }
@@ -483,7 +546,7 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
 .spinner {
   width: 14px;
   height: 14px;
-  border: 2px solid var(--border);
+  border: 2px solid rgba(255,255,255,0.15);
   border-top-color: var(--accent);
   border-radius: 50%;
   animation: spin 0.7s linear infinite;
