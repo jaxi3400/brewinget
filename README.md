@@ -1,24 +1,34 @@
-# Package Manager GUI
+# Brewinget
 
-A clean, modern desktop app that provides a GUI for package managers:
+A clean, modern desktop GUI for package managers — named after the two it supports:
+
 - **macOS** — Homebrew (`brew`)
-- **Windows** — winget _(coming soon)_
+- **Windows** — winget
 
 Built with [Tauri](https://tauri.app) and vanilla HTML/CSS/JavaScript.
 
 ## Features
 
-- Search for packages by name
-- Install packages with one click and a live log
-- View all installed packages and available updates
+- Search for packages by name, with display name, ID, version, and source
+- Install packages with one click and a live streaming log
+- View all installed packages with update badges
+- Filter out Windows registry (ARP) entries and Microsoft Store noise
+- Update packages in place
 
 ## Development Setup
 
-### Prerequisites
+### Prerequisites — macOS
 
 - macOS with [Homebrew](https://brew.sh) installed
 - Node.js (`brew install node`)
 - Rust (`curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh`)
+
+### Prerequisites — Windows
+
+- Windows 10/11 with winget installed (comes with Windows by default)
+- Node.js (`winget install OpenJS.NodeJS.LTS`)
+- Rust (`winget install Rustlang.Rustup`)
+- Visual Studio C++ Build Tools (`winget install Microsoft.VisualStudio.2022.BuildTools`)
 
 ### Run in development
 

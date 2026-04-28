@@ -1,10 +1,10 @@
 [package]
-name = "winget-gui"
+name = "brewinget"
 version = "0.1.0"
 edition = "2021"
 
 [lib]
-name = "winget_gui_lib"
+name = "brewinget_lib"
 crate-type = ["cdylib", "rlib"]
 
 [build-dependencies]
