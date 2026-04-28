@@ -346,7 +346,12 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
   letter-spacing: 0.05em;
   z-index: 1;
   box-shadow: 0 1px 0 var(--border);
+  transition: color 0.2s ease;
 }
+.installed-table th[data-sort] { cursor: pointer; user-select: none; }
+.installed-table th[data-sort]:hover { color: var(--text); }
+.installed-table th.sort-active { color: var(--accent); }
+.sort-ind { font-size: 10px; opacity: 0.8; }
 .installed-table tr { transition: background 0.2s ease; }
 .installed-table tr:hover td              { background: rgba(255,255,255,0.03); }
 .installed-table tr.skel-row:hover td    { background: transparent; }

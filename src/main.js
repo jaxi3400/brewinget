@@ -123,11 +123,28 @@ const installedFilter = document.getElementById('installed-filter');
 const showArpToggle   = document.getElementById('show-arp-toggle');
 
 let allInstalled = [];
+let sortCol = null;   // null = default (updates first, then alpha)
+let sortDir = 1;      // 1 = asc, -1 = desc
 
 refreshBtn.addEventListener('click', loadInstalled);
 updateAllBtn.addEventListener('click', () => openLog('update-all', '--all'));
 installedFilter.addEventListener('input', renderInstalled);
 showArpToggle.addEventListener('change', renderInstalled);
+
+// Column sort — clicking cycles: asc → desc → default
+document.querySelectorAll('.installed-table th[data-sort]').forEach(th => {
+  th.addEventListener('click', () => {
+    const col = th.dataset.sort;
+    if (sortCol === col) {
+      if (sortDir === 1) { sortDir = -1; }
+      else { sortCol = null; sortDir = 1; }   // third click resets
+    } else {
+      sortCol = col;
+      sortDir = 1;
+    }
+    renderInstalled();
+  });
+});
 
 async function loadInstalled() {
   refreshBtn.disabled = true;
@@ -178,10 +195,23 @@ function renderInstalled() {
     );
   }
 
-  // Updates at top, then alphabetical by name
+  // Sort — respect active column or fall back to updates-first, alpha
   packages = [...packages].sort((a, b) => {
+    if (sortCol === 'name')    return sortDir * a.name.localeCompare(b.name);
+    if (sortCol === 'version') return sortDir * (a.version || '').localeCompare(b.version || '');
+    if (sortCol === 'status') {
+      if (a.hasUpdate !== b.hasUpdate) return a.hasUpdate ? -sortDir : sortDir;
+      return a.name.localeCompare(b.name);
+    }
     if (a.hasUpdate !== b.hasUpdate) return a.hasUpdate ? -1 : 1;
     return a.name.localeCompare(b.name);
+  });
+
+  // Update header indicators
+  document.querySelectorAll('.installed-table th[data-sort]').forEach(th => {
+    const active = th.dataset.sort === sortCol;
+    th.classList.toggle('sort-active', active);
+    th.querySelector('.sort-ind').textContent = active ? (sortDir === 1 ? '↑' : '↓') : '';
   });
 
   const total   = packages.length;
@@ -303,6 +333,33 @@ function closeLog() {
   cleanup();
   logBackdrop.classList.add('hidden');
 }
+
+// ── Keyboard shortcuts ───────────────────────────────────────────────────────
+
+document.addEventListener('keydown', e => {
+  // Escape: close modal if done, or clear the installed filter
+  if (e.key === 'Escape') {
+    if (!logBackdrop.classList.contains('hidden')) {
+      if (!logClose.disabled) closeLog();
+      return;
+    }
+    if (installedFilter.value) {
+      installedFilter.value = '';
+      renderInstalled();
+      return;
+    }
+  }
+
+  // F5 or Ctrl+R while on the installed tab → refresh
+  if ((e.key === 'F5' || (e.ctrlKey && e.key === 'r')) &&
+      document.getElementById('tab-installed').classList.contains('active')) {
+    e.preventDefault();
+    loadInstalled();
+  }
+});
+
+// Auto-focus the search field on launch
+searchInput.focus();
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 
