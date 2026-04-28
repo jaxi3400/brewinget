@@ -23,7 +23,17 @@
         <input id="search-input" type="text" placeholder="Search for a package…" autocomplete="off" />
         <button id="search-btn">Search</button>
       </div>
-      <div id="search-status" class="status-msg"></div>
+      <div class="search-toolbar hidden" id="search-toolbar">
+        <span id="search-status" class="status-msg"></span>
+        <label class="toggle-label">
+          <input type="checkbox" id="show-msstore-toggle" />
+          Show Microsoft Store results
+        </label>
+      </div>
+      <div id="search-empty" class="empty-state">
+        <p class="empty-title">Search for an app to get started</p>
+        <p class="empty-sub">Try "Visual Studio Code", "Firefox", or "Git"</p>
+      </div>
       <div id="results-grid" class="results-grid"></div>
     </section>
 

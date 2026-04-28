@@ -98,13 +98,43 @@ button {
 button:hover:not(:disabled) { background: var(--accent-h); }
 button:disabled { opacity: 0.4; cursor: not-allowed; }
 
+/* ── Utility ── */
+.hidden { display: none !important; }
+
 /* ── Status messages ── */
 .status-msg {
   color: var(--muted);
   font-size: 13px;
-  margin-bottom: 16px;
+  margin-bottom: 0;
   min-height: 18px;
 }
+
+/* ── Search toolbar (status + MS Store toggle) ── */
+.search-toolbar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  margin-bottom: 20px;
+  min-height: 24px;
+}
+
+/* ── Empty / initial state ── */
+.empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 80px 24px;
+  text-align: center;
+}
+.empty-title {
+  font-size: 16px;
+  font-weight: 500;
+  color: var(--text);
+  margin-bottom: 8px;
+}
+.empty-sub { font-size: 13px; color: var(--muted); }
 
 /* ── Results grid ── */
 .results-grid {
@@ -128,20 +158,57 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
 .pkg-name {
   font-weight: 600;
   font-size: 15px;
-  word-break: break-word;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .pkg-id {
   color: var(--muted);
   font-size: 11px;
   font-family: "SF Mono", "Fira Code", monospace;
-  word-break: break-all;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
-.pkg-meta {
-  color: var(--muted);
-  font-size: 12px;
+.pkg-footer {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  min-height: 20px;
 }
+
+.pkg-meta { color: var(--muted); font-size: 12px; }
+
+/* ── Source badges ── */
+.source-badge {
+  font-size: 11px;
+  font-weight: 500;
+  padding: 2px 8px;
+  border-radius: 20px;
+  letter-spacing: 0.02em;
+}
+.source-winget  { background: #1e3a5f44; color: #60a5fa; border: 1px solid #1e3a5f99; }
+.source-msstore { background: #2d1a5f44; color: #a78bfa; border: 1px solid #4c1d9599; }
+.source-brew    { background: #1a3a1e44; color: #4ade80; border: 1px solid #14532d99; }
+
+/* ── Skeleton loading cards ── */
+@keyframes shimmer {
+  0%   { background-position: -600px 0; }
+  100% { background-position: 600px 0; }
+}
+.skel {
+  border-radius: 4px;
+  background: linear-gradient(90deg, var(--border) 25%, #2a2a2a 50%, var(--border) 75%);
+  background-size: 1200px 100%;
+  animation: shimmer 1.5s infinite linear;
+}
+.skel-name { height: 15px; width: 75%; margin-bottom: 8px; }
+.skel-id   { height: 11px; width: 55%; margin-bottom: 8px; }
+.skel-meta { height: 11px; width: 35%; margin-bottom: 16px; }
+.skel-btn  { height: 32px; width: 100%; border-radius: 8px; }
 
 .pkg-card button {
   margin-top: auto;
@@ -149,6 +216,8 @@ button:disabled { opacity: 0.4; cursor: not-allowed; }
   padding: 8px;
   font-size: 13px;
 }
+
+#installed-status { margin-bottom: 16px; }
 
 /* ── Installed toolbar ── */
 .installed-toolbar {

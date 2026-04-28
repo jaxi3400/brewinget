@@ -17,47 +17,96 @@ document.querySelectorAll('.tab').forEach(tab => {
 
 // ── Search ───────────────────────────────────────────────────────────────────
 
-const searchInput = document.getElementById('search-input');
-const searchBtn   = document.getElementById('search-btn');
-const searchStatus = document.getElementById('search-status');
-const resultsGrid  = document.getElementById('results-grid');
+const searchInput       = document.getElementById('search-input');
+const searchBtn         = document.getElementById('search-btn');
+const searchStatus      = document.getElementById('search-status');
+const searchToolbar     = document.getElementById('search-toolbar');
+const searchEmpty       = document.getElementById('search-empty');
+const resultsGrid       = document.getElementById('results-grid');
+const showMsStoreToggle = document.getElementById('show-msstore-toggle');
+
+let allSearchResults = [];
+let lastQuery = '';
 
 searchBtn.addEventListener('click', doSearch);
 searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
+showMsStoreToggle.addEventListener('change', renderSearch);
+
+function isMsStore(pkg) {
+  return pkg.source === 'msstore' || /^[0-9A-Z]{9,13}$/.test(pkg.id);
+}
 
 async function doSearch() {
   const query = searchInput.value.trim();
   if (!query) return;
 
+  lastQuery = query;
   searchBtn.disabled = true;
+  searchEmpty.classList.add('hidden');
+  searchToolbar.classList.remove('hidden');
   searchStatus.textContent = 'Searching…';
-  resultsGrid.innerHTML = '';
+  showSkeletons(8);
 
   try {
-    const packages = await invoke('search_packages', { query });
-
-    if (packages.length === 0) {
-      searchStatus.textContent = 'No packages found.';
-    } else {
-      searchStatus.textContent = `${packages.length} result${packages.length === 1 ? '' : 's'} for "${query}"`;
-      packages.forEach(pkg => {
-        resultsGrid.appendChild(makeCard(pkg));
-      });
-    }
+    allSearchResults = await invoke('search_packages', { query });
+    renderSearch();
   } catch (err) {
+    resultsGrid.innerHTML = '';
     searchStatus.textContent = `Error: ${err}`;
   } finally {
     searchBtn.disabled = false;
   }
 }
 
+function renderSearch() {
+  const showStore = showMsStoreToggle.checked;
+  const packages  = showStore ? allSearchResults : allSearchResults.filter(p => !isMsStore(p));
+  const hidden    = allSearchResults.length - packages.length;
+
+  resultsGrid.innerHTML = '';
+
+  if (packages.length === 0) {
+    searchStatus.textContent = hidden > 0
+      ? `No results shown · ${hidden} Microsoft Store result${hidden === 1 ? '' : 's'} hidden`
+      : `No packages found for "${lastQuery}"`;
+    return;
+  }
+
+  const hiddenNote = hidden > 0 ? ` · ${hidden} Store result${hidden === 1 ? '' : 's'} hidden` : '';
+  searchStatus.textContent = `${packages.length} result${packages.length === 1 ? '' : 's'} for "${lastQuery}"${hiddenNote}`;
+  packages.forEach(pkg => resultsGrid.appendChild(makeCard(pkg)));
+}
+
+function showSkeletons(n) {
+  resultsGrid.innerHTML = '';
+  for (let i = 0; i < n; i++) {
+    const card = document.createElement('div');
+    card.className = 'pkg-card skeleton';
+    card.innerHTML = `
+      <div class="skel skel-name"></div>
+      <div class="skel skel-id"></div>
+      <div class="skel skel-meta"></div>
+      <div class="skel skel-btn"></div>
+    `;
+    resultsGrid.appendChild(card);
+  }
+}
+
+const SOURCE_LABEL = { winget: 'winget', msstore: 'Store', brew: 'brew' };
+
 function makeCard(pkg) {
-  const card = document.createElement('div');
-  card.className = 'pkg-card';
+  const card        = document.createElement('div');
+  card.className    = 'pkg-card';
+  const label       = SOURCE_LABEL[pkg.source] ?? pkg.source;
+  const badgeHtml   = pkg.source
+    ? `<span class="source-badge source-${escHtml(pkg.source)}">${escHtml(label)}</span>`
+    : '';
+  const versionHtml = pkg.version ? `<span class="pkg-meta">${escHtml(pkg.version)}</span>` : '';
+
   card.innerHTML = `
-    <div class="pkg-name">${escHtml(pkg.name)}</div>
-    <div class="pkg-id">${escHtml(pkg.id)}</div>
-    ${pkg.version ? `<div class="pkg-meta">${escHtml(pkg.version)}${pkg.source ? ` · ${escHtml(pkg.source)}` : ''}</div>` : ''}
+    <div class="pkg-name" title="${escHtml(pkg.name)}">${escHtml(pkg.name)}</div>
+    <div class="pkg-id"  title="${escHtml(pkg.id)}">${escHtml(pkg.id)}</div>
+    <div class="pkg-footer">${versionHtml}${badgeHtml}</div>
     <button class="install-btn">Install</button>
   `;
   card.querySelector('.install-btn').addEventListener('click', () => openLog('install', pkg.id));
