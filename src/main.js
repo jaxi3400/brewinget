@@ -2,6 +2,22 @@
 const { invoke } = window.__TAURI__.core;
 const { listen } = window.__TAURI__.event;
 
+// ── Window controls (custom title bar) ───────────────────────────────────────
+
+const tauriWindow = window.__TAURI__.window.getCurrentWindow();
+const winMaxBtn   = document.querySelector('.win-maximize');
+
+document.querySelector('.win-minimize').addEventListener('click', () => tauriWindow.minimize());
+document.querySelector('.win-maximize').addEventListener('click', () => tauriWindow.toggleMaximize());
+document.querySelector('.win-close')   .addEventListener('click', () => tauriWindow.close());
+
+// Swap the maximize icon when the window is already maximized
+tauriWindow.onResized(async () => {
+  const maximized = await tauriWindow.isMaximized();
+  winMaxBtn.innerHTML = maximized ? '&#x2750;' : '&#x25A1;';  // ❐ vs □
+  winMaxBtn.title     = maximized ? 'Restore' : 'Maximize';
+});
+
 // ── Tab switching ────────────────────────────────────────────────────────────
 
 document.querySelectorAll('.tab').forEach(tab => {

@@ -9,12 +9,17 @@
 <body>
   <div class="app">
 
-    <header class="topbar">
+    <header class="topbar" data-tauri-drag-region>
       <span class="logo">🍺 Brewinget</span>
       <nav class="tabs">
         <button class="tab active" data-tab="search">Search</button>
         <button class="tab" data-tab="installed">Installed</button>
       </nav>
+      <div class="win-controls">
+        <button class="win-btn win-minimize" title="Minimize">&#x2212;</button>
+        <button class="win-btn win-maximize" title="Maximize / Restore">&#x25A1;</button>
+        <button class="win-btn win-close"    title="Close">&#x2715;</button>
+      </div>
     </header>
 
     <!-- Search Tab -->
