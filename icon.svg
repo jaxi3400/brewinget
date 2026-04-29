@@ -1,0 +1,104 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1024 1024" width="1024" height="1024">
+  <defs>
+
+    <!-- ── Clip to rounded square ── -->
+    <clipPath id="shape">
+      <rect width="1024" height="1024" rx="230"/>
+    </clipPath>
+
+    <!-- ── Aurora blobs ── -->
+    <radialGradient id="g-purple" cx="22%" cy="20%" r="66%" gradientUnits="objectBoundingBox">
+      <stop offset="0%"   stop-color="#8018e0" stop-opacity="0.92"/>
+      <stop offset="65%"  stop-color="#8018e0" stop-opacity="0.25"/>
+      <stop offset="100%" stop-color="#8018e0" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="g-magenta" cx="84%" cy="14%" r="58%" gradientUnits="objectBoundingBox">
+      <stop offset="0%"   stop-color="#d41878" stop-opacity="0.82"/>
+      <stop offset="65%"  stop-color="#d41878" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#d41878" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="g-blue" cx="90%" cy="86%" r="62%" gradientUnits="objectBoundingBox">
+      <stop offset="0%"   stop-color="#1010b8" stop-opacity="0.85"/>
+      <stop offset="65%"  stop-color="#1010b8" stop-opacity="0.18"/>
+      <stop offset="100%" stop-color="#1010b8" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="g-rust" cx="12%" cy="88%" r="56%" gradientUnits="objectBoundingBox">
+      <stop offset="0%"   stop-color="#c4360e" stop-opacity="0.78"/>
+      <stop offset="65%"  stop-color="#c4360e" stop-opacity="0.16"/>
+      <stop offset="100%" stop-color="#c4360e" stop-opacity="0"/>
+    </radialGradient>
+
+    <radialGradient id="g-violet" cx="50%" cy="54%" r="40%" gradientUnits="objectBoundingBox">
+      <stop offset="0%"   stop-color="#5a0eaa" stop-opacity="0.52"/>
+      <stop offset="100%" stop-color="#5a0eaa" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- ── Soft glow centred on the letter ── -->
+    <radialGradient id="g-glow" cx="42%" cy="54%" r="36%" gradientUnits="objectBoundingBox">
+      <stop offset="0%"   stop-color="#b890ff" stop-opacity="0.40"/>
+      <stop offset="100%" stop-color="#b890ff" stop-opacity="0"/>
+    </radialGradient>
+
+    <!-- ── Top-of-glass specular ── -->
+    <radialGradient id="g-spec" cx="50%" cy="-5%" r="55%" gradientUnits="objectBoundingBox">
+      <stop offset="0%"   stop-color="#ffffff" stop-opacity="0.10"/>
+      <stop offset="100%" stop-color="#ffffff" stop-opacity="0"/>
+    </radialGradient>
+
+  </defs>
+
+  <g clip-path="url(#shape)">
+
+    <!-- Base -->
+    <rect width="1024" height="1024" fill="#06060d"/>
+
+    <!-- Aurora layers (first = topmost in SVG; painted over base) -->
+    <rect width="1024" height="1024" fill="url(#g-purple)"/>
+    <rect width="1024" height="1024" fill="url(#g-magenta)"/>
+    <rect width="1024" height="1024" fill="url(#g-blue)"/>
+    <rect width="1024" height="1024" fill="url(#g-rust)"/>
+    <rect width="1024" height="1024" fill="url(#g-violet)"/>
+
+    <!-- Dark veil — 0.30 is lighter than the app (0.50) so the icon stays vivid -->
+    <rect width="1024" height="1024" fill="rgba(0,0,0,0.30)"/>
+
+    <!-- Ambient glow around where the letter sits -->
+    <rect width="1024" height="1024" fill="url(#g-glow)"/>
+
+    <!-- Top-of-glass specular highlight -->
+    <rect width="1024" height="1024" fill="url(#g-spec)"/>
+
+    <!--
+      ── Letter "b" ──────────────────────────────────────────────────────────
+      Two overlapping strokes, both white @ 88% opacity, stroke-width 84px,
+      rounded line caps:
+
+        1. Stem   — vertical, ascender top to baseline
+        2. Bowl   — open arc from upper junction, clockwise around the right
+                    side, back to lower junction
+
+      Geometry (1024 × 1024 canvas, letter centred at ≈ (512, 512)):
+        Stem centre x  : 332
+        Stem top       : 242   (cap centre; outer edge reaches y ≈ 200)
+        Stem bottom    : 782   (cap centre; outer edge reaches y ≈ 824)
+        Bowl arc r     : 215
+        Upper junction : (332, 452)
+        Lower junction : (332, 770)
+        → arc centre ≈ (477, 611), rightmost stroke edge ≈ x 734
+        Letter bbox    ≈ x 290–734, y 200–824 → visual centre ≈ (512, 512) ✓
+      ──────────────────────────────────────────────────────────────────────── -->
+    <g stroke="rgba(255,255,255,0.88)"
+       stroke-width="84"
+       stroke-linecap="round"
+       fill="none">
+      <!-- Stem (ascender) -->
+      <line x1="332" y1="242" x2="332" y2="782"/>
+      <!-- Bowl: large clockwise arc from upper → lower junction -->
+      <path d="M 332 452 A 215 215 0 1 1 332 770"/>
+    </g>
+
+  </g>
+</svg>
