@@ -64,7 +64,12 @@ async function doSearch() {
   showSkeletons(8);
 
   try {
-    allSearchResults = await invoke('search_packages', { query });
+    const [results, installed] = await Promise.all([
+      invoke('search_packages', { query }),
+      invoke('list_installed').catch(() => []),
+    ]);
+    const installedIds = new Set(installed.map(p => p.id));
+    allSearchResults = results.map(p => ({ ...p, installed: installedIds.has(p.id) }));
     renderSearch();
   } catch (err) {
     resultsGrid.innerHTML = '';
@@ -119,13 +124,18 @@ function makeCard(pkg) {
     : '';
   const versionHtml = pkg.version ? `<span class="pkg-meta">${escHtml(pkg.version)}</span>` : '';
 
+  const btnClass = pkg.installed ? 'install-btn installed' : 'install-btn';
+  const btnLabel = pkg.installed ? 'Already Installed' : 'Install';
+
   card.innerHTML = `
     <div class="pkg-name" title="${escHtml(pkg.name)}">${escHtml(pkg.name)}</div>
     <div class="pkg-id"  title="${escHtml(pkg.id)}">${escHtml(pkg.id)}</div>
     <div class="pkg-footer">${versionHtml}${badgeHtml}</div>
-    <button class="install-btn">Install</button>
+    <button class="${btnClass}">${btnLabel}</button>
   `;
-  card.querySelector('.install-btn').addEventListener('click', () => openLog('install', pkg.id));
+  if (!pkg.installed) {
+    card.querySelector('.install-btn').addEventListener('click', () => openLog('install', pkg.id));
+  }
   return card;
 }
 
