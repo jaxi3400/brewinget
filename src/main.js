@@ -31,6 +31,28 @@ document.querySelectorAll('.tab').forEach(tab => {
   });
 });
 
+// ── Silent-install preference ────────────────────────────────────────────────
+// Persisted in localStorage so it survives between sessions.
+// Default is true (silent on); the user must explicitly opt out.
+
+function getSilentDefault() {
+  return localStorage.getItem('silent_default') !== 'false';
+}
+function setSilentDefault(val) {
+  localStorage.setItem('silent_default', String(val));
+}
+
+const silentDefaultToggle = document.getElementById('silent-default-toggle');
+silentDefaultToggle.checked = getSilentDefault();
+
+silentDefaultToggle.addEventListener('change', () => {
+  setSilentDefault(silentDefaultToggle.checked);
+  // Sync all per-app checkboxes currently visible in the DOM
+  document.querySelectorAll('.silent-check').forEach(cb => {
+    cb.checked = silentDefaultToggle.checked;
+  });
+});
+
 // ── Search ───────────────────────────────────────────────────────────────────
 
 const searchInput       = document.getElementById('search-input');
@@ -126,15 +148,27 @@ function makeCard(pkg) {
 
   const btnClass = pkg.installed ? 'install-btn installed' : 'install-btn';
   const btnLabel = pkg.installed ? 'Already Installed' : 'Install';
+  const silentHtml = !pkg.installed
+    ? `<label class="silent-label">
+         <input type="checkbox" class="silent-check"${getSilentDefault() ? ' checked' : ''}>
+         Silent
+       </label>`
+    : '';
 
   card.innerHTML = `
     <div class="pkg-name" title="${escHtml(pkg.name)}">${escHtml(pkg.name)}</div>
     <div class="pkg-id"  title="${escHtml(pkg.id)}">${escHtml(pkg.id)}</div>
     <div class="pkg-footer">${versionHtml}${badgeHtml}</div>
-    <button class="${btnClass}">${btnLabel}</button>
+    <div class="card-actions">
+      <button class="${btnClass}">${btnLabel}</button>
+      ${silentHtml}
+    </div>
   `;
   if (!pkg.installed) {
-    card.querySelector('.install-btn').addEventListener('click', () => openLog('install', pkg.id));
+    card.querySelector('.install-btn').addEventListener('click', () => {
+      const silent = card.querySelector('.silent-check')?.checked ?? getSilentDefault();
+      openLog('install', pkg.id, silent);
+    });
   }
   return card;
 }
@@ -278,7 +312,13 @@ function renderInstalled() {
       }</td>
       <td>${
         pkg.hasUpdate
-          ? `<button class="btn-update" data-pkg="${escHtml(pkg.id)}">Update</button>`
+          ? `<div class="row-actions">
+               <label class="silent-label">
+                 <input type="checkbox" class="silent-check"${getSilentDefault() ? ' checked' : ''}>
+                 Silent
+               </label>
+               <button class="btn-update" data-pkg="${escHtml(pkg.id)}">Update</button>
+             </div>`
           : ''
       }</td>
     `;
@@ -286,7 +326,10 @@ function renderInstalled() {
   });
 
   installedBody.querySelectorAll('.btn-update').forEach(btn => {
-    btn.addEventListener('click', () => openLog('update', btn.dataset.pkg));
+    btn.addEventListener('click', () => {
+      const silent = btn.closest('.row-actions')?.querySelector('.silent-check')?.checked ?? getSilentDefault();
+      openLog('update', btn.dataset.pkg, silent);
+    });
   });
 }
 
@@ -303,7 +346,7 @@ let unlistenComplete = null;
 
 logClose.addEventListener('click', closeLog);
 
-async function openLog(action, pkgName) {
+async function openLog(action, pkgName, silent = getSilentDefault()) {
   logOutput.textContent = '';
   logFooter.innerHTML = '<div class="spinner"></div> <span>Running…</span>';
   logTitle.textContent = action === 'update-all' ? 'Updating all packages…'
@@ -339,9 +382,9 @@ async function openLog(action, pkgName) {
     if (action === 'update-all') {
       await invoke('update_all_packages');
     } else if (action === 'update') {
-      await invoke('update_package', { package: pkgName, silent: false });
+      await invoke('update_package', { package: pkgName, silent });
     } else {
-      await invoke('install_package', { package: pkgName, silent: false });
+      await invoke('install_package', { package: pkgName, silent });
     }
   } catch (err) {
     cleanup();
