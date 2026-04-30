@@ -35,9 +35,10 @@ pub(crate) fn strip_ansi(s: &str) -> String {
     out
 }
 
-/// Stream stdout + stderr from a child process back to the frontend via Tauri events.
-pub(crate) fn run_streamed(app_handle: tauri::AppHandle, mut child: std::process::Child) {
-    // stderr is read on a background thread so it doesn't block stdout
+/// Stream stdout + stderr from a child process back to the frontend. Returns true on success.
+/// Does NOT emit install-complete — lets the caller decide whether to retry before finishing.
+pub(crate) fn run_streamed_capture(app_handle: &tauri::AppHandle, mut child: std::process::Child) -> bool {
+    // stderr on a background thread so it doesn't block stdout
     if let Some(stderr) = child.stderr.take() {
         let handle = app_handle.clone();
         std::thread::spawn(move || {
@@ -59,14 +60,13 @@ pub(crate) fn run_streamed(app_handle: tauri::AppHandle, mut child: std::process
         });
     }
 
-    match child.wait() {
-        Ok(status) if status.success() => {
-            app_handle.emit("install-complete", "success").ok();
-        }
-        _ => {
-            app_handle.emit("install-complete", "error").ok();
-        }
-    }
+    matches!(child.wait(), Ok(s) if s.success())
+}
+
+/// Stream a child process and emit install-complete when done.
+pub(crate) fn run_streamed(app_handle: tauri::AppHandle, child: std::process::Child) {
+    let ok = run_streamed_capture(&app_handle, child);
+    app_handle.emit("install-complete", if ok { "success" } else { "error" }).ok();
 }
 
 // ── Tauri commands ───────────────────────────────────────────────────────────
@@ -77,8 +77,8 @@ fn search_packages(query: String) -> Result<Vec<serde_json::Value>, String> {
 }
 
 #[tauri::command]
-fn install_package(app_handle: tauri::AppHandle, package: String) {
-    pm::install_package(app_handle, package);
+fn install_package(app_handle: tauri::AppHandle, package: String, silent: bool) {
+    pm::install_package(app_handle, package, silent);
 }
 
 #[tauri::command]
@@ -87,8 +87,8 @@ fn list_installed() -> Result<Vec<serde_json::Value>, String> {
 }
 
 #[tauri::command]
-fn update_package(app_handle: tauri::AppHandle, package: String) {
-    pm::update_package(app_handle, package);
+fn update_package(app_handle: tauri::AppHandle, package: String, silent: bool) {
+    pm::update_package(app_handle, package, silent);
 }
 
 #[tauri::command]

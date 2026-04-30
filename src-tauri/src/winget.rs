@@ -16,6 +16,24 @@ fn winget(args: &[&str]) -> Command {
     cmd
 }
 
+/// Spawn winget with base_args, optionally append silent flags, stream output.
+/// Returns true if the process exited successfully. Does not emit install-complete.
+fn run_winget_op(app_handle: &tauri::AppHandle, base_args: &[&str], silent: bool) -> bool {
+    let mut cmd = winget(base_args);
+    if silent {
+        // --silent: request unattended install from the underlying installer.
+        // --disable-interactivity: suppress winget's own interactive prompts.
+        cmd.arg("--silent").arg("--disable-interactivity");
+    }
+    match cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn() {
+        Ok(child) => crate::run_streamed_capture(app_handle, child),
+        Err(e) => {
+            app_handle.emit("install-output", format!("Error: {}", e)).ok();
+            false
+        }
+    }
+}
+
 // ── Public commands ───────────────────────────────────────────────────────────
 
 pub fn search_packages(query: String) -> Result<Vec<serde_json::Value>, String> {
@@ -47,28 +65,23 @@ pub fn search_packages(query: String) -> Result<Vec<serde_json::Value>, String> 
     Ok(packages)
 }
 
-pub fn install_package(app_handle: tauri::AppHandle, package: String) {
+pub fn install_package(app_handle: tauri::AppHandle, package: String, silent: bool) {
     std::thread::spawn(move || {
-        match winget(&[
-            "install",
-            "--id",
-            &package,
-            "--exact",
-            "--accept-package-agreements",
-            "--accept-source-agreements",
-        ])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        {
-            Ok(child) => crate::run_streamed(app_handle, child),
-            Err(e) => {
-                app_handle
-                    .emit("install-output", format!("Error: {}", e))
-                    .ok();
-                app_handle.emit("install-complete", "error").ok();
-            }
+        let args = [
+            "install", "--id", package.as_str(), "--exact",
+            "--accept-package-agreements", "--accept-source-agreements",
+        ];
+        let mut ok = run_winget_op(&app_handle, &args, silent);
+        if !ok && silent {
+            // Some installers don't support --silent; retry interactively so the
+            // user gets a working install rather than a silent failure.
+            app_handle.emit(
+                "install-output",
+                "⚠  Silent install failed — retrying without --silent (an installer window may appear)…",
+            ).ok();
+            ok = run_winget_op(&app_handle, &args, false);
         }
+        app_handle.emit("install-complete", if ok { "success" } else { "error" }).ok();
     });
 }
 
@@ -142,28 +155,21 @@ pub fn update_all_packages(app_handle: tauri::AppHandle) {
     });
 }
 
-pub fn update_package(app_handle: tauri::AppHandle, package: String) {
+pub fn update_package(app_handle: tauri::AppHandle, package: String, silent: bool) {
     std::thread::spawn(move || {
-        match winget(&[
-            "upgrade",
-            "--id",
-            &package,
-            "--exact",
-            "--accept-package-agreements",
-            "--accept-source-agreements",
-        ])
-        .stdout(Stdio::piped())
-        .stderr(Stdio::piped())
-        .spawn()
-        {
-            Ok(child) => crate::run_streamed(app_handle, child),
-            Err(e) => {
-                app_handle
-                    .emit("install-output", format!("Error: {}", e))
-                    .ok();
-                app_handle.emit("install-complete", "error").ok();
-            }
+        let args = [
+            "upgrade", "--id", package.as_str(), "--exact",
+            "--accept-package-agreements", "--accept-source-agreements",
+        ];
+        let mut ok = run_winget_op(&app_handle, &args, silent);
+        if !ok && silent {
+            app_handle.emit(
+                "install-output",
+                "⚠  Silent update failed — retrying without --silent (an installer window may appear)…",
+            ).ok();
+            ok = run_winget_op(&app_handle, &args, false);
         }
+        app_handle.emit("install-complete", if ok { "success" } else { "error" }).ok();
     });
 }
 

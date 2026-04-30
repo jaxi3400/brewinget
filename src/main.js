@@ -339,9 +339,9 @@ async function openLog(action, pkgName) {
     if (action === 'update-all') {
       await invoke('update_all_packages');
     } else if (action === 'update') {
-      await invoke('update_package', { package: pkgName });
+      await invoke('update_package', { package: pkgName, silent: false });
     } else {
-      await invoke('install_package', { package: pkgName });
+      await invoke('install_package', { package: pkgName, silent: false });
     }
   } catch (err) {
     cleanup();
