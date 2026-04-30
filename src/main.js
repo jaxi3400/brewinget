@@ -187,7 +187,11 @@ let sortCol = null;   // null = default (updates first, then alpha)
 let sortDir = 1;      // 1 = asc, -1 = desc
 
 refreshBtn.addEventListener('click', loadInstalled);
-updateAllBtn.addEventListener('click', () => openLog('update-all', '--all'));
+updateAllBtn.addEventListener('click', () => {
+  const packages = allInstalled.filter(p => p.hasUpdate && !p.isArp).map(p => p.id);
+  if (packages.length === 0) return;
+  openQueue(packages, getSilentDefault());
+});
 installedFilter.addEventListener('input', renderInstalled);
 showArpToggle.addEventListener('change', renderInstalled);
 
@@ -281,8 +285,8 @@ function renderInstalled() {
     ? 'No packages match your filter.'
     : `${total} package${total === 1 ? '' : 's'}${updates ? ` · ${updates} update${updates === 1 ? '' : 's'} available` : ''}`;
 
-  // Show/hide "Update All" only when there are ≥2 pending updates and no filter active
-  if (updates >= 2 && !filterText) {
+  // Show/hide "Update All" when there is ≥1 pending update and no filter active
+  if (updates >= 1 && !filterText) {
     updateAllBtn.textContent = `Update All (${updates})`;
     updateAllBtn.classList.remove('hidden');
   } else {
@@ -349,9 +353,7 @@ logClose.addEventListener('click', closeLog);
 async function openLog(action, pkgName, silent = getSilentDefault()) {
   logOutput.textContent = '';
   logFooter.innerHTML = '<div class="spinner"></div> <span>Running…</span>';
-  logTitle.textContent = action === 'update-all' ? 'Updating all packages…'
-    : action === 'update' ? `Updating: ${pkgName}`
-    : `Installing: ${pkgName}`;
+  logTitle.textContent = action === 'update' ? `Updating: ${pkgName}` : `Installing: ${pkgName}`;
   logClose.disabled = true;
   logBackdrop.classList.remove('hidden');
 
@@ -379,9 +381,7 @@ async function openLog(action, pkgName, silent = getSilentDefault()) {
 
   // Kick off the Rust command
   try {
-    if (action === 'update-all') {
-      await invoke('update_all_packages');
-    } else if (action === 'update') {
+    if (action === 'update') {
       await invoke('update_package', { package: pkgName, silent });
     } else {
       await invoke('install_package', { package: pkgName, silent });
@@ -401,6 +401,127 @@ function cleanup() {
 function closeLog() {
   cleanup();
   logBackdrop.classList.add('hidden');
+}
+
+// ── Update-All Queue Panel ────────────────────────────────────────────────────
+
+const queuePanel    = document.getElementById('queue-panel');
+const queueList     = document.getElementById('queue-list');
+const queueLog      = document.getElementById('queue-log');
+const queueProgressEl = document.getElementById('queue-progress');
+const abortBtn      = document.getElementById('abort-btn');
+
+let queueUnlistenOutput   = null;
+let queueUnlistenStart    = null;
+let queueUnlistenDone     = null;
+let queueUnlistenComplete = null;
+let queueDone = false;
+
+abortBtn.addEventListener('click', () => {
+  if (queueDone) {
+    closeQueue();
+    loadInstalled();
+  } else {
+    invoke('abort_update_all');
+    abortBtn.textContent = 'Aborting…';
+    abortBtn.disabled = true;
+  }
+});
+
+function findQueueItem(name) {
+  for (const li of queueList.querySelectorAll('.queue-item')) {
+    if (li.dataset.pkg === name) return li;
+  }
+  return null;
+}
+
+function cleanupQueue() {
+  if (queueUnlistenOutput)   { queueUnlistenOutput();   queueUnlistenOutput   = null; }
+  if (queueUnlistenStart)    { queueUnlistenStart();    queueUnlistenStart    = null; }
+  if (queueUnlistenDone)     { queueUnlistenDone();     queueUnlistenDone     = null; }
+  if (queueUnlistenComplete) { queueUnlistenComplete(); queueUnlistenComplete = null; }
+}
+
+function closeQueue() {
+  cleanupQueue();
+  queuePanel.classList.add('hidden');
+}
+
+async function openQueue(packages, silent) {
+  queueDone = false;
+  queueList.innerHTML = '';
+  queueLog.textContent = '';
+  queueProgressEl.textContent = `0 of ${packages.length}`;
+  abortBtn.textContent = 'Abort';
+  abortBtn.disabled = false;
+  abortBtn.classList.remove('done');
+
+  // Build the queue item list
+  packages.forEach(pkg => {
+    const li = document.createElement('li');
+    li.className = 'queue-item queue-pending';
+    li.dataset.pkg = pkg;
+    li.innerHTML = `
+      <span class="qi-icon"></span>
+      <span class="qi-name" title="${escHtml(pkg)}">${escHtml(pkg)}</span>
+      <button class="qi-skip">Skip</button>
+    `;
+    li.querySelector('.qi-skip').addEventListener('click', async () => {
+      if (!li.classList.contains('queue-pending')) return;
+      li.classList.replace('queue-pending', 'queue-skipped');
+      li.querySelector('.qi-skip').remove();
+      await invoke('skip_package', { pkg });
+    });
+    queueList.appendChild(li);
+  });
+
+  queuePanel.classList.remove('hidden');
+
+  // Wire up event listeners
+  queueUnlistenOutput = await listen('install-output', e => {
+    queueLog.textContent += e.payload + '\n';
+    queueLog.scrollTop = queueLog.scrollHeight;
+  });
+
+  queueUnlistenStart = await listen('pkg-start', e => {
+    const { name, index, total } = e.payload;
+    queueProgressEl.textContent = `${index} of ${total}`;
+    const li = findQueueItem(name);
+    if (!li) return;
+    li.classList.replace('queue-pending', 'queue-active');
+    li.querySelector('.qi-skip')?.remove();
+    li.querySelector('.qi-icon').innerHTML = '<span class="qi-spinner"></span>';
+    li.scrollIntoView({ block: 'nearest' });
+  });
+
+  queueUnlistenDone = await listen('pkg-done', e => {
+    const { name, status } = e.payload;
+    const li = findQueueItem(name);
+    if (!li) return;
+    li.classList.remove('queue-active', 'queue-pending');
+    li.classList.add(`queue-${status}`);
+    li.querySelector('.qi-icon').innerHTML = ''; // spinner → state icon via CSS ::before
+  });
+
+  queueUnlistenComplete = await listen('install-complete', () => {
+    cleanupQueue();
+    queueDone = true;
+    abortBtn.textContent = 'Close';
+    abortBtn.disabled = false;
+    abortBtn.classList.add('done');
+  });
+
+  // Start the Rust command
+  try {
+    await invoke('update_all_packages_queued', { packages, silent });
+  } catch (err) {
+    cleanupQueue();
+    queueLog.textContent += `\nError: ${err}\n`;
+    queueDone = true;
+    abortBtn.textContent = 'Close';
+    abortBtn.disabled = false;
+    abortBtn.classList.add('done');
+  }
 }
 
 // ── Keyboard shortcuts ───────────────────────────────────────────────────────

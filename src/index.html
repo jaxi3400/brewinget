@@ -48,32 +48,52 @@
 
     <!-- Installed Tab -->
     <section id="tab-installed" class="tab-content">
-      <div class="section-header">
-        <h2>Installed Packages</h2>
-        <div class="section-actions">
-          <button id="update-all-btn" class="btn-update-all hidden">Update All</button>
-          <button id="refresh-btn">Refresh</button>
+      <div class="installed-layout">
+
+        <!-- Main content -->
+        <div class="installed-main">
+          <div class="section-header">
+            <h2>Installed Packages</h2>
+            <div class="section-actions">
+              <button id="update-all-btn" class="btn-update-all hidden">Update All</button>
+              <button id="refresh-btn">Refresh</button>
+            </div>
+          </div>
+          <div class="installed-toolbar">
+            <input id="installed-filter" type="text" placeholder="Filter packages…" autocomplete="off" />
+            <label class="toggle-label">
+              <input type="checkbox" id="show-arp-toggle" />
+              Show all detected programs
+            </label>
+          </div>
+          <div id="installed-status" class="status-msg"></div>
+          <table id="installed-table" class="installed-table">
+            <thead>
+              <tr>
+                <th data-sort="name">Package <span class="sort-ind"></span></th>
+                <th data-sort="version">Version <span class="sort-ind"></span></th>
+                <th data-sort="status">Status <span class="sort-ind"></span></th>
+                <th>Action</th>
+              </tr>
+            </thead>
+            <tbody id="installed-body"></tbody>
+          </table>
         </div>
+
+        <!-- Queue side panel — visible only while update-all is running -->
+        <aside id="queue-panel" class="queue-panel hidden">
+          <div class="queue-header">
+            <div class="queue-title-block">
+              <span class="queue-title">Updating packages</span>
+              <span id="queue-progress" class="queue-progress">0 of 0</span>
+            </div>
+            <button id="abort-btn" class="btn-abort">Abort</button>
+          </div>
+          <ul id="queue-list" class="queue-list"></ul>
+          <pre id="queue-log" class="queue-log"></pre>
+        </aside>
+
       </div>
-      <div class="installed-toolbar">
-        <input id="installed-filter" type="text" placeholder="Filter packages…" autocomplete="off" />
-        <label class="toggle-label">
-          <input type="checkbox" id="show-arp-toggle" />
-          Show all detected programs
-        </label>
-      </div>
-      <div id="installed-status" class="status-msg"></div>
-      <table id="installed-table" class="installed-table">
-        <thead>
-          <tr>
-            <th data-sort="name">Package <span class="sort-ind"></span></th>
-            <th data-sort="version">Version <span class="sort-ind"></span></th>
-            <th data-sort="status">Status <span class="sort-ind"></span></th>
-            <th>Action</th>
-          </tr>
-        </thead>
-        <tbody id="installed-body"></tbody>
-      </table>
     </section>
 
   </div>

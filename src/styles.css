@@ -377,7 +377,31 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
   transform: none;
 }
 
-/* ── Installed tab ── */
+/* ── Installed tab — two-column layout to support the queue side panel ── */
+
+/* Override tab-content defaults so installed-main can own its own scroll. */
+#tab-installed.active {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding: 0;
+}
+
+.installed-layout {
+  display: flex;
+  flex: 1;
+  gap: 16px;
+  overflow: hidden;
+  padding: 24px;
+}
+
+/* The table area scrolls independently so the queue panel stays full-height. */
+.installed-main {
+  flex: 1;
+  min-width: 0;
+  overflow-y: auto;
+}
+
 #installed-status { margin-bottom: 16px; }
 
 .section-actions { display: flex; align-items: center; gap: 10px; }
@@ -632,3 +656,166 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
   flex-shrink: 0;
 }
 @keyframes spin { to { transform: rotate(360deg); } }
+
+/* ══ Queue side panel ═══════════════════════════════════════════════════════ */
+
+.queue-panel {
+  width: 320px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  background: var(--card);
+  backdrop-filter: blur(24px);
+  -webkit-backdrop-filter: blur(24px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: var(--shadow-md);
+}
+
+.queue-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 14px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.queue-title-block { display: flex; flex-direction: column; gap: 2px; }
+.queue-title   { font-weight: 600; font-size: 13px; color: var(--text); }
+.queue-progress { font-size: 11px; color: var(--muted); font-family: "SF Mono","Fira Code",monospace; }
+
+/* ── Abort / Close button ── */
+.btn-abort {
+  background: rgba(248,113,113,0.10);
+  border: 1px solid rgba(248,113,113,0.28);
+  color: var(--error);
+  font-size: 12px;
+  padding: 5px 12px;
+  box-shadow: none;
+  white-space: nowrap;
+  flex-shrink: 0;
+}
+.btn-abort:hover:not(:disabled) {
+  background: rgba(248,113,113,0.20);
+  border-color: rgba(248,113,113,0.50);
+  box-shadow: none;
+}
+.btn-abort.done {
+  background: rgba(52,211,153,0.10);
+  border-color: rgba(52,211,153,0.28);
+  color: var(--success);
+}
+.btn-abort.done:hover:not(:disabled) {
+  background: rgba(52,211,153,0.20);
+  border-color: rgba(52,211,153,0.50);
+  box-shadow: none;
+}
+
+/* ── Queue item list ── */
+.queue-list {
+  list-style: none;
+  overflow-y: auto;
+  flex-shrink: 0;
+  max-height: 45%;
+  padding: 6px;
+  border-bottom: 1px solid var(--border);
+}
+
+.queue-item {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 6px 8px;
+  border-radius: 6px;
+  border: 1px solid transparent;
+  margin-bottom: 2px;
+  transition: background 0.2s ease, border-color 0.2s ease, opacity 0.2s ease;
+}
+
+.qi-icon {
+  flex-shrink: 0;
+  width: 16px;
+  height: 16px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 12px;
+}
+
+.qi-name {
+  flex: 1;
+  min-width: 0;
+  font-size: 11px;
+  font-family: "SF Mono","Fira Code",monospace;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  color: var(--text-2);
+}
+
+/* Skip button — tiny, unobtrusive */
+.qi-skip {
+  background: none;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  color: var(--muted);
+  font-size: 10px;
+  padding: 2px 7px;
+  flex-shrink: 0;
+  box-shadow: none;
+}
+.qi-skip:hover:not(:disabled) {
+  border-color: var(--border-h);
+  color: var(--text-2);
+  box-shadow: none;
+}
+
+/* Inline spinner for the active item */
+.qi-spinner {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  border: 1.5px solid rgba(255,255,255,0.15);
+  border-top-color: var(--accent);
+  border-radius: 50%;
+  animation: spin 0.7s linear infinite;
+}
+
+/* Per-state styles */
+.queue-pending { opacity: 0.45; }
+.queue-pending .qi-name { color: var(--muted); }
+
+.queue-active {
+  opacity: 1;
+  background: var(--accent-dim);
+  border-color: rgba(99,102,241,0.25);
+}
+.queue-active .qi-name { color: var(--text); }
+
+.queue-success .qi-icon::before { content: '✓'; color: var(--success); font-size: 11px; }
+.queue-success .qi-name { color: var(--text-2); }
+.queue-success { opacity: 0.75; }
+
+.queue-error .qi-icon::before { content: '✕'; color: var(--error); font-size: 11px; }
+.queue-error .qi-name { color: var(--error); }
+
+.queue-skipped { opacity: 0.35; }
+.queue-skipped .qi-name { text-decoration: line-through; color: var(--muted); }
+.queue-skipped .qi-icon::before { content: '—'; color: var(--muted); font-size: 11px; }
+
+/* ── Queue log ── */
+.queue-log {
+  flex: 1;
+  overflow-y: auto;
+  padding: 12px 14px;
+  margin: 0;
+  font-family: "SF Mono","Fira Code",monospace;
+  font-size: 11px;
+  line-height: 1.6;
+  color: var(--text-2);
+  white-space: pre-wrap;
+  word-break: break-all;
+}
