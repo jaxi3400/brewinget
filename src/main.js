@@ -416,6 +416,7 @@ let queueUnlistenStart    = null;
 let queueUnlistenDone     = null;
 let queueUnlistenComplete = null;
 let queueDone = false;
+let currentPkgLog = []; // collects output lines for the package currently running
 
 abortBtn.addEventListener('click', () => {
   if (queueDone) {
@@ -440,6 +441,7 @@ function cleanupQueue() {
   if (queueUnlistenStart)    { queueUnlistenStart();    queueUnlistenStart    = null; }
   if (queueUnlistenDone)     { queueUnlistenDone();     queueUnlistenDone     = null; }
   if (queueUnlistenComplete) { queueUnlistenComplete(); queueUnlistenComplete = null; }
+  currentPkgLog = [];
 }
 
 function closeQueue() {
@@ -463,7 +465,9 @@ async function openQueue(packages, silent) {
     li.dataset.pkg = pkg;
     li.innerHTML = `
       <span class="qi-icon"></span>
-      <span class="qi-name" title="${escHtml(pkg)}">${escHtml(pkg)}</span>
+      <div class="qi-info">
+        <span class="qi-name" title="${escHtml(pkg)}">${escHtml(pkg)}</span>
+      </div>
       <button class="qi-skip">Skip</button>
     `;
     li.querySelector('.qi-skip').addEventListener('click', async () => {
@@ -479,11 +483,13 @@ async function openQueue(packages, silent) {
 
   // Wire up event listeners
   queueUnlistenOutput = await listen('install-output', e => {
+    currentPkgLog.push(e.payload);
     queueLog.textContent += e.payload + '\n';
     queueLog.scrollTop = queueLog.scrollHeight;
   });
 
   queueUnlistenStart = await listen('pkg-start', e => {
+    currentPkgLog = [];   // fresh log buffer for the new package
     const { name, index, total } = e.payload;
     queueProgressEl.textContent = `${index} of ${total}`;
     const li = findQueueItem(name);
@@ -501,6 +507,19 @@ async function openQueue(packages, silent) {
     li.classList.remove('queue-active', 'queue-pending');
     li.classList.add(`queue-${status}`);
     li.querySelector('.qi-icon').innerHTML = ''; // spinner → state icon via CSS ::before
+
+    if (status === 'error') {
+      // Show the last meaningful output line as a hint so the user can see why it failed
+      // without having to scroll the full log. Full output is always in the log pane below.
+      const hint = [...currentPkgLog].reverse().find(l => l.trim().length > 4) ?? '';
+      if (hint) {
+        const el = document.createElement('span');
+        el.className = 'qi-error-hint';
+        el.title = hint;           // full text on hover
+        el.textContent = hint;     // CSS truncates with ellipsis
+        li.querySelector('.qi-info').appendChild(el);
+      }
+    }
   });
 
   queueUnlistenComplete = await listen('install-complete', () => {

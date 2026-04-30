@@ -90,6 +90,29 @@ pub(crate) fn strip_ansi(s: &str) -> String {
     out
 }
 
+/// Returns true if a log line is worth showing in the UI.
+///
+/// winget writes spinner frames (\|/-) and block-character progress bars to stdout
+/// separated by \r.  After we take the last \r segment we still may get pure block-
+/// char lines (e.g. "████████░░░░") or lone spinner chars.  We keep a line only if
+/// it contains at least one ASCII letter — this passes "Downloading…", "1024 KB /
+/// 83.2 MB", "Successfully installed", etc., while silently dropping the noise.
+fn is_meaningful(line: &str) -> bool {
+    line.chars().any(|c| c.is_ascii_alphabetic())
+}
+
+/// Emit one line from a raw winget/brew output line, applying the \r-frame and
+/// noise filters.  Nothing is emitted if the line carries no useful information.
+fn emit_line(handle: &tauri::AppHandle, raw: &str) {
+    let clean = strip_ansi(raw);
+    // winget overwrites the same terminal line with \r; grab the last frame.
+    let last = clean.rsplit('\r').next().unwrap_or(clean.as_str());
+    let trimmed = last.trim();
+    if is_meaningful(trimmed) {
+        handle.emit("install-output", trimmed).ok();
+    }
+}
+
 /// Stream stdout + stderr from a child process back to the frontend. Returns true on success.
 /// Does NOT emit install-complete — lets the caller decide whether to retry before finishing.
 pub(crate) fn run_streamed_capture(app_handle: &tauri::AppHandle, mut child: std::process::Child) -> bool {
@@ -97,22 +120,14 @@ pub(crate) fn run_streamed_capture(app_handle: &tauri::AppHandle, mut child: std
     if let Some(stderr) = child.stderr.take() {
         let handle = app_handle.clone();
         std::thread::spawn(move || {
-            BufReader::new(stderr).lines().flatten().for_each(|line| {
-                let clean = strip_ansi(&line);
-                if !clean.trim().is_empty() {
-                    handle.emit("install-output", clean).ok();
-                }
-            });
+            BufReader::new(stderr).lines().flatten()
+                .for_each(|line| emit_line(&handle, &line));
         });
     }
 
     if let Some(stdout) = child.stdout.take() {
-        BufReader::new(stdout).lines().flatten().for_each(|line| {
-            let clean = strip_ansi(&line);
-            if !clean.trim().is_empty() {
-                app_handle.emit("install-output", clean).ok();
-            }
-        });
+        BufReader::new(stdout).lines().flatten()
+            .for_each(|line| emit_line(app_handle, &line));
     }
 
     matches!(child.wait(), Ok(s) if s.success())

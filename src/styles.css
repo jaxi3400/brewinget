@@ -745,15 +745,33 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
   font-size: 12px;
 }
 
-.qi-name {
+/* Wraps name + optional error hint; takes the flexible width in the item row */
+.qi-info {
   flex: 1;
   min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.qi-name {
   font-size: 11px;
   font-family: "SF Mono","Fira Code",monospace;
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
   color: var(--text-2);
+}
+
+/* Last error line shown under the package name when an update fails */
+.qi-error-hint {
+  font-size: 10px;
+  color: var(--error);
+  opacity: 0.80;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: help;    /* hint that hovering reveals the full message via title= */
 }
 
 /* Skip button — tiny, unobtrusive */
