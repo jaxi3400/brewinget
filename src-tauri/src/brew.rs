@@ -101,6 +101,72 @@ pub fn update_package(app_handle: tauri::AppHandle, package: String, silent: boo
     });
 }
 
+pub fn update_all_packages_queued(
+    app_handle: tauri::AppHandle,
+    packages: Vec<String>,
+    silent: bool,
+    ctrl: std::sync::Arc<crate::QueueControl>,
+) {
+    std::thread::spawn(move || {
+        let total = packages.len();
+        let mut n_ok = 0usize;
+        let mut n_err = 0usize;
+        let mut n_skip = 0usize;
+
+        for (i, pkg) in packages.iter().enumerate() {
+            if ctrl.should_abort() {
+                app_handle.emit("install-output", "⛔  Aborted — remaining packages skipped.").ok();
+                n_skip += packages.len() - i;
+                break;
+            }
+
+            if ctrl.should_skip(pkg) {
+                app_handle.emit("pkg-done", crate::PkgDoneEvent {
+                    name: pkg.clone(), status: "skipped".into(),
+                }).ok();
+                app_handle.emit("install-output", format!("⏭  Skipped: {pkg}")).ok();
+                n_skip += 1;
+                continue;
+            }
+
+            app_handle.emit("pkg-start", crate::PkgStartEvent {
+                name: pkg.clone(), index: i + 1, total,
+            }).ok();
+            app_handle.emit("install-output",
+                format!("\n── Updating {pkg} ({}/{total}) ──", i + 1),
+            ).ok();
+
+            let mut cmd = Command::new(exe());
+            cmd.arg("upgrade").arg(pkg.as_str());
+            if silent { cmd.arg("--quiet"); }
+            let ok = match cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn() {
+                Ok(child) => crate::run_streamed_capture(&app_handle, child),
+                Err(e) => {
+                    app_handle.emit("install-output", format!("Error: {e}")).ok();
+                    false
+                }
+            };
+
+            if ok {
+                n_ok += 1;
+                app_handle.emit("install-output", format!("✓ {pkg} updated.")).ok();
+            } else {
+                n_err += 1;
+                app_handle.emit("install-output", format!("✕ {pkg} update failed.")).ok();
+            }
+            app_handle.emit("pkg-done", crate::PkgDoneEvent {
+                name: pkg.clone(),
+                status: if ok { "success" } else { "error" }.into(),
+            }).ok();
+        }
+
+        app_handle.emit("install-output",
+            format!("\n── Done: {n_ok} updated, {n_err} failed, {n_skip} skipped ──"),
+        ).ok();
+        app_handle.emit("install-complete", "success").ok();
+    });
+}
+
 pub fn update_all_packages(app_handle: tauri::AppHandle) {
     std::thread::spawn(move || {
         match Command::new(exe())

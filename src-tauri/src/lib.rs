@@ -1,4 +1,9 @@
+use std::collections::HashSet;
 use std::io::{BufRead, BufReader};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc, Mutex,
+};
 use tauri::Emitter;
 
 #[cfg(target_os = "macos")]
@@ -11,6 +16,56 @@ mod winget;
 use brew as pm;
 #[cfg(target_os = "windows")]
 use winget as pm;
+
+// ── Per-package update-all control ───────────────────────────────────────────
+
+/// Shared state between the update-all worker thread and the skip/abort commands.
+/// Stored as Arc<QueueControl> in Tauri's managed state so every command can
+/// reach it without a global.
+pub(crate) struct QueueControl {
+    skip:  Mutex<HashSet<String>>,
+    abort: AtomicBool,
+}
+
+impl QueueControl {
+    pub(crate) fn new() -> Self {
+        Self {
+            skip:  Mutex::new(HashSet::new()),
+            abort: AtomicBool::new(false),
+        }
+    }
+    pub(crate) fn reset(&self) {
+        self.skip.lock().unwrap().clear();
+        self.abort.store(false, Ordering::SeqCst);
+    }
+    pub(crate) fn should_skip(&self, pkg: &str) -> bool {
+        self.skip.lock().unwrap().contains(pkg)
+    }
+    pub(crate) fn should_abort(&self) -> bool {
+        self.abort.load(Ordering::SeqCst)
+    }
+    pub(crate) fn add_skip(&self, pkg: String) {
+        self.skip.lock().unwrap().insert(pkg);
+    }
+    pub(crate) fn set_abort(&self) {
+        self.abort.store(true, Ordering::SeqCst);
+    }
+}
+
+/// Emitted when a package in the update queue starts running.
+#[derive(serde::Serialize, Clone)]
+pub(crate) struct PkgStartEvent {
+    pub name:  String,
+    pub index: usize,
+    pub total: usize,
+}
+
+/// Emitted when a package in the update queue finishes (or is skipped).
+#[derive(serde::Serialize, Clone)]
+pub(crate) struct PkgDoneEvent {
+    pub name:   String,
+    pub status: String, // "success" | "error" | "skipped"
+}
 
 // ── Shared utilities ─────────────────────────────────────────────────────────
 
@@ -96,15 +151,45 @@ fn update_all_packages(app_handle: tauri::AppHandle) {
     pm::update_all_packages(app_handle);
 }
 
+/// Start a per-package update queue. Resets skip/abort state, then hands off
+/// to the platform module which runs each package in sequence on a worker thread.
+#[tauri::command]
+fn update_all_packages_queued(
+    app_handle: tauri::AppHandle,
+    packages: Vec<String>,
+    silent: bool,
+    ctrl: tauri::State<'_, Arc<QueueControl>>,
+) {
+    let ctrl = Arc::clone(&ctrl);
+    ctrl.reset();
+    pm::update_all_packages_queued(app_handle, packages, silent, ctrl);
+}
+
+/// Mark a package as "to be skipped" in the running update queue.
+#[tauri::command]
+fn skip_package(pkg: String, ctrl: tauri::State<'_, Arc<QueueControl>>) {
+    ctrl.add_skip(pkg);
+}
+
+/// Signal the running update queue to stop after the current package finishes.
+#[tauri::command]
+fn abort_update_all(ctrl: tauri::State<'_, Arc<QueueControl>>) {
+    ctrl.set_abort();
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
+        .manage(Arc::new(QueueControl::new()))
         .invoke_handler(tauri::generate_handler![
             search_packages,
             install_package,
             list_installed,
             update_package,
             update_all_packages,
+            update_all_packages_queued,
+            skip_package,
+            abort_update_all,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
