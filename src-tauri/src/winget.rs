@@ -339,15 +339,9 @@ fn col_str(chars: &[char], total: usize, start: usize, end: usize) -> String {
 // the elevated PowerShell can connect to the pipe created by the
 // non-elevated Tauri process.
 //
-// Skip / abort signals travel through a second ctrl pipe (write-end held by
-// ElevatedCtrl managed state; PS reads with a 50 ms timeout between packages).
-//
-// Known limitation: ConnectNamedPipe is a blocking call.  If the elevated
-// process exits before connecting (e.g. PowerShell not found, script syntax
-// error), this call will block indefinitely.  In practice this never happens
-// on a normal Windows 10/11 machine because PowerShell 5.1 ships in-box and
-// the generated script has no user-variable content that can cause syntax
-// errors.  A proper fix using overlapped I/O would add significant complexity.
+// Skip / abort signals are forwarded through a second ctrl pipe added in
+// commit 5b.  Until then, the Skip / Abort buttons in the UI call the
+// existing Tauri commands but have no effect on the elevated process.
 
 use windows_sys::Win32::{
     Foundation::{CloseHandle, HANDLE, INVALID_HANDLE_VALUE},
@@ -442,8 +436,10 @@ fn do_elevated_update(
     app_handle.emit("install-output", "Elevated process started…").ok();
 
     // PS connects to the output pipe first, then the ctrl pipe.
-    // ERROR_PIPE_CONNECTED means a client connected before ConnectNamedPipe was
-    // called — treat it as success.
+    // ConnectNamedPipe blocks until a client connects (or returns ERROR_PIPE_CONNECTED
+    // if the client already connected before this call — treated as success).
+    // Limitation for 5c: if the elevated process crashes before connecting,
+    // these calls will block indefinitely.
     connect_pipe(out_handle.0)?;
     connect_pipe(ctrl_handle.0)?;
 
@@ -701,32 +697,6 @@ for ($i = 0; $i -lt $total; $i++) {
     } catch {
         $sw.WriteLine("LOG`tFailed to run winget: $_")
         $ok = $false
-    }
-
-    # Some installers ignore --silent and fail; retry without it so the user gets
-    # a working install even if an interactive installer window appears.
-    if (-not $ok -and $isSilent) {
-        $sw.WriteLine("LOG`t⚠  Silent update failed — retrying without --silent…")
-        $psi2 = New-Object System.Diagnostics.ProcessStartInfo
-        $psi2.FileName               = 'cmd.exe'
-        $psi2.Arguments              = "/c winget upgrade --id `"$pkg`" --exact --accept-package-agreements --accept-source-agreements"
-        $psi2.UseShellExecute        = $false
-        $psi2.RedirectStandardOutput = $true
-        $psi2.RedirectStandardError  = $true
-        $psi2.CreateNoWindow         = $true
-        try {
-            $proc2    = [System.Diagnostics.Process]::Start($psi2)
-            $outTask2 = $proc2.StandardOutput.ReadToEndAsync()
-            $errTask2 = $proc2.StandardError.ReadToEndAsync()
-            $proc2.WaitForExit()
-            foreach ($ln in (($outTask2.Result + "`n" + $errTask2.Result) -split "`n")) {
-                $ln = $ln.TrimEnd("`r")
-                if ($ln.Trim()) { $sw.WriteLine("LOG`t$ln") }
-            }
-            $ok = ($proc2.ExitCode -eq 0)
-        } catch {
-            $sw.WriteLine("LOG`tRetry also failed: $_")
-        }
     }
 
     if ($ok) { $nOk++ } else { $nErr++ }
