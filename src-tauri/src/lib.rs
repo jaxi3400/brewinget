@@ -17,37 +17,6 @@ use brew as pm;
 #[cfg(target_os = "windows")]
 use winget as pm;
 
-// ── Elevated-queue ctrl pipe ─────────────────────────────────────────────────
-
-/// Write-end of the ctrl pipe for a running elevated queue.  None when idle.
-/// skip_package / abort_update_all write commands here; the elevated PS reads them.
-pub(crate) struct ElevatedCtrl {
-    writer: Mutex<Option<std::fs::File>>,
-}
-
-impl ElevatedCtrl {
-    pub(crate) fn new() -> Self { Self { writer: Mutex::new(None) } }
-
-    pub(crate) fn set(&self, f: std::fs::File) {
-        *self.writer.lock().unwrap() = Some(f);
-    }
-
-    pub(crate) fn clear(&self) {
-        *self.writer.lock().unwrap() = None;
-    }
-
-    /// Write a line to the ctrl pipe.  Returns false if no pipe is active.
-    pub(crate) fn send(&self, cmd: &str) -> bool {
-        use std::io::Write;
-        let mut guard = self.writer.lock().unwrap();
-        if let Some(f) = guard.as_mut() {
-            f.write_all(cmd.as_bytes()).is_ok()
-        } else {
-            false
-        }
-    }
-}
-
 // ── Per-package update-all control ───────────────────────────────────────────
 
 /// Shared state between the update-all worker thread and the skip/abort commands.
@@ -212,25 +181,14 @@ fn update_all_packages_queued(
 }
 
 /// Mark a package as "to be skipped" in the running update queue.
-/// For the elevated path the signal is forwarded through the ctrl pipe;
-/// QueueControl is also updated so the non-elevated path stays consistent.
 #[tauri::command]
-fn skip_package(
-    pkg: String,
-    ctrl: tauri::State<'_, Arc<QueueControl>>,
-    elevated_ctrl: tauri::State<'_, Arc<ElevatedCtrl>>,
-) {
-    elevated_ctrl.send(&format!("SKIP\t{}\n", pkg));
+fn skip_package(pkg: String, ctrl: tauri::State<'_, Arc<QueueControl>>) {
     ctrl.add_skip(pkg);
 }
 
-/// Signal the running update queue to abort after the current package finishes.
+/// Signal the running update queue to stop after the current package finishes.
 #[tauri::command]
-fn abort_update_all(
-    ctrl: tauri::State<'_, Arc<QueueControl>>,
-    elevated_ctrl: tauri::State<'_, Arc<ElevatedCtrl>>,
-) {
-    elevated_ctrl.send("ABORT\n");
+fn abort_update_all(ctrl: tauri::State<'_, Arc<QueueControl>>) {
     ctrl.set_abort();
 }
 
@@ -244,19 +202,16 @@ fn update_all_packages_elevated(
     packages: Vec<String>,
     silent: bool,
     ctrl: tauri::State<'_, Arc<QueueControl>>,
-    elevated_ctrl: tauri::State<'_, Arc<ElevatedCtrl>>,
 ) {
-    let ctrl          = Arc::clone(&ctrl);
-    let elevated_ctrl = Arc::clone(&elevated_ctrl);
+    let ctrl = Arc::clone(&ctrl);
     ctrl.reset();
-    pm::update_all_elevated(app_handle, packages, silent, ctrl, elevated_ctrl);
+    pm::update_all_elevated(app_handle, packages, silent, ctrl);
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
         .manage(Arc::new(QueueControl::new()))
-        .manage(Arc::new(ElevatedCtrl::new()))
         .invoke_handler(tauri::generate_handler![
             search_packages,
             install_package,
