@@ -532,7 +532,7 @@ async function openQueue(packages, silent) {
 
   // Start the Rust command
   try {
-    await invoke('update_all_packages_elevated', { packages, silent });
+    await invoke('update_all_packages_queued', { packages, silent });
   } catch (err) {
     cleanupQueue();
     queueLog.textContent += `\nError: ${err}\n`;
