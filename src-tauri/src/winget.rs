@@ -352,6 +352,7 @@ use windows_sys::Win32::{
 // These constants have well-known numeric values; we define them rather than
 // importing from windows-sys to avoid pulling in additional feature gates.
 const PIPE_ACCESS_INBOUND: u32       = 1;
+const PIPE_ACCESS_OUTBOUND: u32      = 2;
 const FILE_FLAG_FIRST_PIPE_INSTANCE: u32 = 0x0008_0000;
 const PIPE_TYPE_BYTE: u32            = 0;
 const PIPE_READMODE_BYTE: u32        = 0;
@@ -385,10 +386,13 @@ pub fn update_all_elevated(
     app_handle: tauri::AppHandle,
     packages: Vec<String>,
     silent: bool,
-    _ctrl: std::sync::Arc<crate::QueueControl>, // skip/abort wired in commit 5b
+    _ctrl: std::sync::Arc<crate::QueueControl>,
+    elevated_ctrl: std::sync::Arc<crate::ElevatedCtrl>,
 ) {
     std::thread::spawn(move || {
-        if let Err(e) = do_elevated_update(&app_handle, &packages, silent) {
+        let result = do_elevated_update(&app_handle, &packages, silent, &elevated_ctrl);
+        elevated_ctrl.clear(); // always release pipe handle, even on error
+        if let Err(e) = result {
             app_handle.emit("install-output", format!("✕ {e}")).ok();
             app_handle.emit("install-complete", "error").ok();
         }
@@ -399,6 +403,7 @@ fn do_elevated_update(
     app_handle: &tauri::AppHandle,
     packages: &[String],
     silent: bool,
+    elevated_ctrl: &crate::ElevatedCtrl,
 ) -> Result<(), String> {
     use std::io::BufRead;
 
@@ -407,14 +412,18 @@ fn do_elevated_update(
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_nanos() as u64)
         .unwrap_or(0);
-    let suffix       = format!("{:08x}-{:016x}", pid, t);
+    let suffix        = format!("{:08x}-{:016x}", pid, t);
     let out_pipe_path = format!(r"\\.\pipe\brewinget-out-{}", suffix);
-    let out_pipe_key  = format!("brewinget-out-{}", suffix); // PS uses just the name, not the path
+    let out_pipe_key  = format!("brewinget-out-{}", suffix);
+    let ctrl_pipe_path = format!(r"\\.\pipe\brewinget-ctrl-{}", suffix);
+    let ctrl_pipe_key  = format!("brewinget-ctrl-{}", suffix);
 
-    let out_handle = OwnedHandle(create_pipe(&out_pipe_path)?);
+    // Create both pipes before launching; PS connects to them after UAC approves.
+    let out_handle  = OwnedHandle(create_pipe(&out_pipe_path,  PIPE_ACCESS_INBOUND)?);
+    let ctrl_handle = OwnedHandle(create_pipe(&ctrl_pipe_path, PIPE_ACCESS_OUTBOUND)?);
 
     let script_path = std::env::temp_dir().join(format!("brewinget-{}.ps1", pid));
-    let script      = build_ps_script(&out_pipe_key, packages, silent);
+    let script      = build_ps_script(&out_pipe_key, &ctrl_pipe_key, packages, silent);
     std::fs::write(&script_path, script.as_bytes())
         .map_err(|e| format!("Failed to write update script: {e}"))?;
 
@@ -426,19 +435,18 @@ fn do_elevated_update(
 
     app_handle.emit("install-output", "Elevated process started…").ok();
 
-    // Block until the elevated PowerShell connects (happens within seconds of start).
-    // Limitation: if the elevated process crashes before connecting (e.g. script not
-    // found), ConnectNamedPipe blocks indefinitely.  A timeout will be added in 5c.
-    let r = unsafe { ConnectNamedPipe(out_handle.0, std::ptr::null_mut::<OVERLAPPED>()) };
-    if r == 0 {
-        let code = std::io::Error::last_os_error().raw_os_error().unwrap_or(0) as u32;
-        if code != ERROR_PIPE_CONNECTED {
-            let _ = std::fs::remove_file(&script_path);
-            return Err(format!("Pipe connection failed (OS error {})", code));
-        }
-    }
+    // PS connects to the output pipe first, then the ctrl pipe.
+    // ConnectNamedPipe blocks until a client connects (or returns ERROR_PIPE_CONNECTED
+    // if the client already connected before this call — treated as success).
+    // Limitation for 5c: if the elevated process crashes before connecting,
+    // these calls will block indefinitely.
+    connect_pipe(out_handle.0)?;
+    connect_pipe(ctrl_handle.0)?;
 
-    // Hand the HANDLE to BufReader; reads lines that the elevated PS writes.
+    // Give the ctrl pipe write-end to ElevatedCtrl so skip/abort commands can reach PS.
+    elevated_ctrl.set(ctrl_handle.into_file());
+
+    // Hand the output HANDLE to BufReader; reads lines that the elevated PS writes.
     let reader = std::io::BufReader::new(out_handle.into_file());
 
     let mut n_ok   = 0usize;
@@ -467,12 +475,19 @@ fn do_elevated_update(
             let p: Vec<&str> = rest.splitn(2, '\t').collect();
             if p.len() == 2 {
                 let (name, status) = (p[0], p[1]);
-                if status == "success" {
-                    n_ok += 1;
-                    app_handle.emit("install-output", format!("✓ {name} updated.")).ok();
-                } else {
-                    n_err += 1;
-                    app_handle.emit("install-output", format!("✕ {name} update failed.")).ok();
+                match status {
+                    "success" => {
+                        n_ok += 1;
+                        app_handle.emit("install-output", format!("✓ {name} updated.")).ok();
+                    }
+                    "skipped" => {
+                        n_skip += 1;
+                        // ⏭ log lines come from PS for user-skips; nothing extra here.
+                    }
+                    _ => {
+                        n_err += 1;
+                        app_handle.emit("install-output", format!("✕ {name} update failed.")).ok();
+                    }
                 }
                 app_handle.emit("pkg-done", crate::PkgDoneEvent {
                     name: name.to_string(), status: status.to_string(),
@@ -501,15 +516,15 @@ fn do_elevated_update(
     Ok(())
 }
 
-fn create_pipe(name: &str) -> Result<HANDLE, String> {
+fn create_pipe(name: &str, access: u32) -> Result<HANDLE, String> {
     let wide: Vec<u16> = name.encode_utf16().chain(std::iter::once(0)).collect();
     let h = unsafe {
         CreateNamedPipeW(
             wide.as_ptr(),
-            PIPE_ACCESS_INBOUND | FILE_FLAG_FIRST_PIPE_INSTANCE,
+            access | FILE_FLAG_FIRST_PIPE_INSTANCE,
             PIPE_TYPE_BYTE | PIPE_READMODE_BYTE | PIPE_WAIT | PIPE_REJECT_REMOTE_CLIENTS,
             1,      // max instances
-            0,      // out buffer (we only read)
+            65536,  // out buffer
             65536,  // in buffer
             0,      // default timeout
             std::ptr::null(),
@@ -523,6 +538,17 @@ fn create_pipe(name: &str) -> Result<HANDLE, String> {
     } else {
         Ok(h)
     }
+}
+
+fn connect_pipe(handle: HANDLE) -> Result<(), String> {
+    let r = unsafe { ConnectNamedPipe(handle, std::ptr::null_mut::<OVERLAPPED>()) };
+    if r == 0 {
+        let code = std::io::Error::last_os_error().raw_os_error().unwrap_or(0) as u32;
+        if code != ERROR_PIPE_CONNECTED {
+            return Err(format!("ConnectNamedPipe failed (OS error {})", code));
+        }
+    }
+    Ok(())
 }
 
 fn launch_elevated(script_path: &str) -> Result<HANDLE, String> {
@@ -560,7 +586,12 @@ fn to_wide(s: &str) -> Vec<u16> {
     s.encode_utf16().chain(std::iter::once(0)).collect()
 }
 
-fn build_ps_script(out_pipe_key: &str, packages: &[String], silent: bool) -> String {
+fn build_ps_script(
+    out_pipe_key: &str,
+    ctrl_pipe_key: &str,
+    packages: &[String],
+    silent: bool,
+) -> String {
     // Embed the package list as a JSON literal inside a PS single-quoted string.
     // Single-quoted PS strings treat " literally, so standard JSON is safe here.
     // Package IDs are alphanumeric with dots/dashes and won't contain ' in practice.
@@ -568,28 +599,78 @@ fn build_ps_script(out_pipe_key: &str, packages: &[String], silent: bool) -> Str
     let silent_ps     = if silent { "$true" } else { "$false" };
 
     ELEVATED_SCRIPT
-        .replace("BREWINGET_OUT_PIPE", out_pipe_key)
-        .replace("BREWINGET_PACKAGES", &packages_json)
-        .replace("BREWINGET_SILENT",   silent_ps)
+        .replace("BREWINGET_OUT_PIPE",  out_pipe_key)
+        .replace("BREWINGET_CTRL_PIPE", ctrl_pipe_key)
+        .replace("BREWINGET_PACKAGES",  &packages_json)
+        .replace("BREWINGET_SILENT",    silent_ps)
 }
 
 // PowerShell script run elevated.  Placeholder tokens are substituted by build_ps_script.
-// Uses ProcessStartInfo so winget output is captured and forwarded line-by-line.
+//
+// Ctrl pipe protocol (Rust → PS, line-delimited UTF-8):
+//   SKIP\t<pkg_id>   — skip the named package if not yet started
+//   ABORT            — stop after the current package, mark remaining as skipped
 const ELEVATED_SCRIPT: &str = r#"
-$outPipeName = 'BREWINGET_OUT_PIPE'
-$packages    = 'BREWINGET_PACKAGES' | ConvertFrom-Json
-$isSilent    = BREWINGET_SILENT
-$total       = $packages.Count
-$nOk = 0; $nErr = 0
+$outPipeName  = 'BREWINGET_OUT_PIPE'
+$ctrlPipeName = 'BREWINGET_CTRL_PIPE'
+$packages     = 'BREWINGET_PACKAGES' | ConvertFrom-Json
+$isSilent     = BREWINGET_SILENT
+$total        = $packages.Count
+$nOk = 0; $nErr = 0; $nSkip = 0
+$abort        = $false
+$skipSet      = @{}
 
-$pipe = New-Object System.IO.Pipes.NamedPipeClientStream('.', $outPipeName, [System.IO.Pipes.PipeDirection]::Out)
-try { $pipe.Connect(15000) } catch { exit 1 }
-$sw = New-Object System.IO.StreamWriter($pipe, [System.Text.Encoding]::UTF8)
+# Connect output pipe (Rust reads, we write)
+$outPipe = New-Object System.IO.Pipes.NamedPipeClientStream('.', $outPipeName, [System.IO.Pipes.PipeDirection]::Out)
+try { $outPipe.Connect(15000) } catch { exit 1 }
+$sw = New-Object System.IO.StreamWriter($outPipe, [System.Text.Encoding]::UTF8)
 $sw.AutoFlush = $true
 $sw.NewLine   = "`n"
 
+# Connect ctrl pipe (Rust writes, we read).  Asynchronous mode enables ReadTimeout.
+$ctrlPipe = $null; $ctrlBuf = $null
+try {
+    $ctrlPipe = New-Object System.IO.Pipes.NamedPipeClientStream('.', $ctrlPipeName, [System.IO.Pipes.PipeDirection]::In, [System.IO.Pipes.PipeOptions]::Asynchronous)
+    $ctrlPipe.Connect(5000)
+    $ctrlPipe.ReadTimeout = 50
+    $ctrlBuf = New-Object byte[] 4096
+} catch {
+    $ctrlPipe = $null; $ctrlBuf = $null
+}
+
 for ($i = 0; $i -lt $total; $i++) {
+    # Drain any pending ctrl commands before starting each package
+    if ($null -ne $ctrlPipe) {
+        try {
+            $n = $ctrlPipe.Read($ctrlBuf, 0, $ctrlBuf.Length)
+            if ($n -gt 0) {
+                ([System.Text.Encoding]::UTF8.GetString($ctrlBuf, 0, $n) -split "`n") | ForEach-Object {
+                    $cmd = $_.TrimEnd("`r")
+                    if ($cmd -eq 'ABORT') { $abort = $true }
+                    elseif ($cmd -match '^SKIP\t(.+)$') { $skipSet[$Matches[1]] = $true }
+                }
+            }
+        } catch {}
+    }
+
+    if ($abort) {
+        $sw.WriteLine("LOG`t⛔  Aborted — remaining packages skipped.")
+        for ($j = $i; $j -lt $total; $j++) {
+            $sw.WriteLine("PKG_DONE`t$($packages[$j])`tskipped")
+            $nSkip++
+        }
+        break
+    }
+
     $pkg = $packages[$i]
+
+    if ($skipSet.ContainsKey($pkg)) {
+        $sw.WriteLine("LOG`t⏭  Skipped: $pkg")
+        $sw.WriteLine("PKG_DONE`t$pkg`tskipped")
+        $nSkip++
+        continue
+    }
+
     $sw.WriteLine("PKG_START`t$pkg`t$($i+1)`t$total")
 
     $flags = '--accept-package-agreements --accept-source-agreements'
@@ -622,8 +703,9 @@ for ($i = 0; $i -lt $total; $i++) {
     $sw.WriteLine("PKG_DONE`t$pkg`t$(if ($ok) {'success'} else {'error'})")
 }
 
-$sw.WriteLine("ALL_DONE`t$nOk`t$nErr`t0")
+$sw.WriteLine("ALL_DONE`t$nOk`t$nErr`t$nSkip")
 $sw.Flush()
-try { $pipe.WaitForPipeDrain() } catch {}
-$pipe.Close()
+try { $outPipe.WaitForPipeDrain() } catch {}
+$outPipe.Close()
+if ($null -ne $ctrlPipe) { try { $ctrlPipe.Close() } catch {} }
 "#;

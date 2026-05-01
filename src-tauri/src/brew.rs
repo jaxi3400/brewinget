@@ -172,6 +172,7 @@ pub fn update_all_elevated(
     packages: Vec<String>,
     silent: bool,
     ctrl: std::sync::Arc<crate::QueueControl>,
+    _elevated_ctrl: std::sync::Arc<crate::ElevatedCtrl>,
 ) {
     // brew doesn't require elevation; delegate to the normal queued path.
     update_all_packages_queued(app_handle, packages, silent, ctrl);
