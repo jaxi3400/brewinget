@@ -192,6 +192,22 @@ fn abort_update_all(ctrl: tauri::State<'_, Arc<QueueControl>>) {
     ctrl.set_abort();
 }
 
+/// Elevate once via UAC, then run the full package queue as admin.
+/// On Windows this prompts for administrator permission up front and streams
+/// output through a named pipe.  On macOS brew.rs delegates to the normal
+/// queued path (no elevation needed).
+#[tauri::command]
+fn update_all_packages_elevated(
+    app_handle: tauri::AppHandle,
+    packages: Vec<String>,
+    silent: bool,
+    ctrl: tauri::State<'_, Arc<QueueControl>>,
+) {
+    let ctrl = Arc::clone(&ctrl);
+    ctrl.reset();
+    pm::update_all_elevated(app_handle, packages, silent, ctrl);
+}
+
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     tauri::Builder::default()
@@ -205,6 +221,7 @@ pub fn run() {
             update_all_packages_queued,
             skip_package,
             abort_update_all,
+            update_all_packages_elevated,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

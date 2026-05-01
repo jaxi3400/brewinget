@@ -167,6 +167,16 @@ pub fn update_all_packages_queued(
     });
 }
 
+pub fn update_all_elevated(
+    app_handle: tauri::AppHandle,
+    packages: Vec<String>,
+    silent: bool,
+    ctrl: std::sync::Arc<crate::QueueControl>,
+) {
+    // brew doesn't require elevation; delegate to the normal queued path.
+    update_all_packages_queued(app_handle, packages, silent, ctrl);
+}
+
 pub fn update_all_packages(app_handle: tauri::AppHandle) {
     std::thread::spawn(move || {
         match Command::new(exe())
