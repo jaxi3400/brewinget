@@ -824,6 +824,52 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
 .queue-skipped .qi-name { text-decoration: line-through; color: var(--muted); }
 .queue-skipped .qi-icon::before { content: '—'; color: var(--muted); font-size: 11px; }
 
+.queue-app-running .qi-icon::before { content: '⚠'; color: var(--warning); font-size: 11px; }
+.queue-app-running .qi-name { color: var(--warning); }
+
+/* Amber hint shown under the package name for "app is running" failures */
+.qi-app-running-hint {
+  font-size: 10px;
+  color: var(--warning);
+  opacity: 0.85;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+/* Retry button in queue item row */
+.qi-retry {
+  background: none;
+  border: 1px solid rgba(251,191,36,0.30);
+  border-radius: 4px;
+  color: var(--warning);
+  font-size: 10px;
+  padding: 2px 7px;
+  flex-shrink: 0;
+  box-shadow: none;
+}
+.qi-retry:hover:not(:disabled) {
+  background: rgba(251,191,36,0.15);
+  border-color: rgba(251,191,36,0.50);
+  box-shadow: none;
+}
+
+/* Retry button in log modal footer */
+.btn-retry {
+  background: rgba(251,191,36,0.10);
+  border: 1px solid rgba(251,191,36,0.28);
+  color: var(--warning);
+  font-size: 12px;
+  padding: 5px 12px;
+  box-shadow: none;
+  flex-shrink: 0;
+}
+.btn-retry:hover:not(:disabled) {
+  background: rgba(251,191,36,0.20);
+  border-color: rgba(251,191,36,0.50);
+  box-shadow: none;
+}
+
 /* ── Queue log ── */
 .queue-log {
   flex: 1;

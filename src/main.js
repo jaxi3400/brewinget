@@ -374,6 +374,18 @@ async function openLog(action, pkgName, silent = getSilentDefault()) {
       if (document.getElementById('tab-installed').classList.contains('active')) {
         loadInstalled();
       }
+    } else if (event.payload === 'app-running') {
+      const isSelf = /brewinget/i.test(pkgName);
+      const msg = isSelf
+        ? 'Brewinget needs to be closed to update itself. Restart from a fresh launch and try again.'
+        : 'The app is running — close it, then retry.';
+      logFooter.innerHTML = `
+        <span style="color:var(--warning)">⚠ ${escHtml(msg)}</span>
+        <button class="btn-retry" id="log-retry-btn">Retry</button>
+      `;
+      document.getElementById('log-retry-btn').addEventListener('click', () => {
+        openLog(action, pkgName, silent);
+      });
     } else {
       logFooter.innerHTML = '<span style="color: var(--error)">✕ Something went wrong. See log above.</span>';
     }
@@ -519,6 +531,17 @@ async function openQueue(packages, silent) {
         el.textContent = hint;     // CSS truncates with ellipsis
         li.querySelector('.qi-info').appendChild(el);
       }
+    } else if (status === 'app-running') {
+      const hint = document.createElement('span');
+      hint.className = 'qi-app-running-hint';
+      hint.textContent = 'Close the app to update';
+      li.querySelector('.qi-info').appendChild(hint);
+
+      const retryBtn = document.createElement('button');
+      retryBtn.className = 'qi-retry';
+      retryBtn.textContent = 'Retry';
+      retryBtn.addEventListener('click', () => openLog('update', name, silent));
+      li.appendChild(retryBtn);
     }
   });
 

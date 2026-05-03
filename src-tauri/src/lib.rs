@@ -69,6 +69,35 @@ pub(crate) struct PkgDoneEvent {
 
 // ── Shared utilities ─────────────────────────────────────────────────────────
 
+/// Returns true when the captured output / exit code signals that a running
+/// process blocked the install or update.  Checks English and Danish phrases
+/// because winget outputs in the system locale.
+pub(crate) fn detect_app_running(output: &str, exit_code: Option<i32>) -> bool {
+    // 1603 = Windows Installer generic failure (very often "app is running").
+    // 0x80070005 as i32 = -2147024891 (ERROR_ACCESS_DENIED from a locked file).
+    if matches!(exit_code, Some(1603) | Some(-2147024891)) {
+        return true;
+    }
+    let lower = output.to_lowercase();
+    let keywords: &[&str] = &[
+        // English
+        "currently running",
+        "in use",
+        "close the application",
+        "please close",
+        "running process",
+        "file is in use",
+        "another instance",
+        // Danish (winget uses system locale)
+        "kørende",
+        "luk programmet",
+        "er i brug",
+        "er åben",
+        "lukke programmet",
+    ];
+    keywords.iter().any(|kw| lower.contains(kw))
+}
+
 /// Strip ANSI escape codes so terminal colors don't pollute the log.
 pub(crate) fn strip_ansi(s: &str) -> String {
     let mut out = String::new();
@@ -113,30 +142,63 @@ fn emit_line(handle: &tauri::AppHandle, raw: &str) {
     }
 }
 
-/// Stream stdout + stderr from a child process back to the frontend. Returns true on success.
+/// Stream stdout + stderr from a child process back to the frontend.
+/// Returns (success, captured_output, exit_code).
 /// Does NOT emit install-complete — lets the caller decide whether to retry before finishing.
-pub(crate) fn run_streamed_capture(app_handle: &tauri::AppHandle, mut child: std::process::Child) -> bool {
+pub(crate) fn run_streamed_capture(
+    app_handle: &tauri::AppHandle,
+    mut child: std::process::Child,
+) -> (bool, String, Option<i32>) {
+    let captured = Arc::new(Mutex::new(String::new()));
+
     // stderr on a background thread so it doesn't block stdout
-    if let Some(stderr) = child.stderr.take() {
+    let stderr_thread = child.stderr.take().map(|stderr| {
         let handle = app_handle.clone();
+        let cap = Arc::clone(&captured);
         std::thread::spawn(move || {
-            BufReader::new(stderr).lines().flatten()
-                .for_each(|line| emit_line(&handle, &line));
-        });
-    }
+            for line in BufReader::new(stderr).lines().flatten() {
+                emit_line(&handle, &line);
+                let mut c = cap.lock().unwrap();
+                c.push_str(&line);
+                c.push('\n');
+            }
+        })
+    });
 
     if let Some(stdout) = child.stdout.take() {
-        BufReader::new(stdout).lines().flatten()
-            .for_each(|line| emit_line(app_handle, &line));
+        for line in BufReader::new(stdout).lines().flatten() {
+            emit_line(app_handle, &line);
+            let mut c = captured.lock().unwrap();
+            c.push_str(&line);
+            c.push('\n');
+        }
     }
 
-    matches!(child.wait(), Ok(s) if s.success())
+    let status = child.wait();
+    if let Some(t) = stderr_thread {
+        let _ = t.join();
+    }
+
+    let (success, exit_code) = match &status {
+        Ok(s) => (s.success(), s.code()),
+        Err(_) => (false, None),
+    };
+    let output = captured.lock().unwrap().clone();
+    (success, output, exit_code)
 }
 
 /// Stream a child process and emit install-complete when done.
+/// Automatically classifies failures as "app-running" or "error".
 pub(crate) fn run_streamed(app_handle: tauri::AppHandle, child: std::process::Child) {
-    let ok = run_streamed_capture(&app_handle, child);
-    app_handle.emit("install-complete", if ok { "success" } else { "error" }).ok();
+    let (ok, output, code) = run_streamed_capture(&app_handle, child);
+    let status = if ok {
+        "success"
+    } else if detect_app_running(&output, code) {
+        "app-running"
+    } else {
+        "error"
+    };
+    app_handle.emit("install-complete", status).ok();
 }
 
 // ── Tauri commands ───────────────────────────────────────────────────────────

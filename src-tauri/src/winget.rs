@@ -17,8 +17,12 @@ fn winget(args: &[&str]) -> Command {
 }
 
 /// Spawn winget with base_args, optionally append silent flags, stream output.
-/// Returns true if the process exited successfully. Does not emit install-complete.
-fn run_winget_op(app_handle: &tauri::AppHandle, base_args: &[&str], silent: bool) -> bool {
+/// Returns (success, captured_output, exit_code). Does not emit install-complete.
+fn run_winget_op(
+    app_handle: &tauri::AppHandle,
+    base_args: &[&str],
+    silent: bool,
+) -> (bool, String, Option<i32>) {
     let mut cmd = winget(base_args);
     if silent {
         // --silent: request unattended install from the underlying installer.
@@ -29,7 +33,7 @@ fn run_winget_op(app_handle: &tauri::AppHandle, base_args: &[&str], silent: bool
         Ok(child) => crate::run_streamed_capture(app_handle, child),
         Err(e) => {
             app_handle.emit("install-output", format!("Error: {}", e)).ok();
-            false
+            (false, String::new(), None)
         }
     }
 }
@@ -71,7 +75,7 @@ pub fn install_package(app_handle: tauri::AppHandle, package: String, silent: bo
             "install", "--id", package.as_str(), "--exact",
             "--accept-package-agreements", "--accept-source-agreements",
         ];
-        let mut ok = run_winget_op(&app_handle, &args, silent);
+        let (mut ok, mut output, mut code) = run_winget_op(&app_handle, &args, silent);
         if !ok && silent {
             // Some installers don't support --silent; retry interactively so the
             // user gets a working install rather than a silent failure.
@@ -79,9 +83,19 @@ pub fn install_package(app_handle: tauri::AppHandle, package: String, silent: bo
                 "install-output",
                 "⚠  Silent install failed — retrying without --silent (an installer window may appear)…",
             ).ok();
-            ok = run_winget_op(&app_handle, &args, false);
+            let (ok2, output2, code2) = run_winget_op(&app_handle, &args, false);
+            ok = ok2;
+            output.push_str(&output2);
+            code = code2;
         }
-        app_handle.emit("install-complete", if ok { "success" } else { "error" }).ok();
+        let status = if ok {
+            "success"
+        } else if crate::detect_app_running(&output, code) {
+            "app-running"
+        } else {
+            "error"
+        };
+        app_handle.emit("install-complete", status).ok();
     });
 }
 
@@ -171,24 +185,33 @@ pub fn update_all_packages_queued(
                 "upgrade", "--id", pkg.as_str(), "--exact",
                 "--accept-package-agreements", "--accept-source-agreements",
             ];
-            let mut ok = run_winget_op(&app_handle, &args, silent);
+            let (mut ok, mut output, mut code) = run_winget_op(&app_handle, &args, silent);
             if !ok && silent {
                 app_handle.emit("install-output",
                     "⚠  Silent update failed — retrying without --silent…",
                 ).ok();
-                ok = run_winget_op(&app_handle, &args, false);
+                let (ok2, output2, code2) = run_winget_op(&app_handle, &args, false);
+                ok = ok2;
+                output.push_str(&output2);
+                code = code2;
             }
 
+            let app_running = !ok && crate::detect_app_running(&output, code);
             if ok {
                 n_ok += 1;
                 app_handle.emit("install-output", format!("✓ {pkg} updated.")).ok();
+            } else if app_running {
+                n_err += 1;
+                app_handle.emit("install-output",
+                    format!("⚠  {pkg}: close the app to update."),
+                ).ok();
             } else {
                 n_err += 1;
                 app_handle.emit("install-output", format!("✕ {pkg} update failed.")).ok();
             }
             app_handle.emit("pkg-done", crate::PkgDoneEvent {
                 name: pkg.clone(),
-                status: if ok { "success" } else { "error" }.into(),
+                status: if ok { "success" } else if app_running { "app-running" } else { "error" }.into(),
             }).ok();
         }
 
@@ -228,15 +251,25 @@ pub fn update_package(app_handle: tauri::AppHandle, package: String, silent: boo
             "upgrade", "--id", package.as_str(), "--exact",
             "--accept-package-agreements", "--accept-source-agreements",
         ];
-        let mut ok = run_winget_op(&app_handle, &args, silent);
+        let (mut ok, mut output, mut code) = run_winget_op(&app_handle, &args, silent);
         if !ok && silent {
             app_handle.emit(
                 "install-output",
                 "⚠  Silent update failed — retrying without --silent (an installer window may appear)…",
             ).ok();
-            ok = run_winget_op(&app_handle, &args, false);
+            let (ok2, output2, code2) = run_winget_op(&app_handle, &args, false);
+            ok = ok2;
+            output.push_str(&output2);
+            code = code2;
         }
-        app_handle.emit("install-complete", if ok { "success" } else { "error" }).ok();
+        let status = if ok {
+            "success"
+        } else if crate::detect_app_running(&output, code) {
+            "app-running"
+        } else {
+            "error"
+        };
+        app_handle.emit("install-complete", status).ok();
     });
 }
 

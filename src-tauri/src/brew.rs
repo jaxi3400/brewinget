@@ -139,24 +139,30 @@ pub fn update_all_packages_queued(
             let mut cmd = Command::new(exe());
             cmd.arg("upgrade").arg(pkg.as_str());
             if silent { cmd.arg("--quiet"); }
-            let ok = match cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn() {
+            let (ok, output, code) = match cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn() {
                 Ok(child) => crate::run_streamed_capture(&app_handle, child),
                 Err(e) => {
                     app_handle.emit("install-output", format!("Error: {e}")).ok();
-                    false
+                    (false, String::new(), None)
                 }
             };
 
+            let app_running = !ok && crate::detect_app_running(&output, code);
             if ok {
                 n_ok += 1;
                 app_handle.emit("install-output", format!("✓ {pkg} updated.")).ok();
+            } else if app_running {
+                n_err += 1;
+                app_handle.emit("install-output",
+                    format!("⚠  {pkg}: close the app to update."),
+                ).ok();
             } else {
                 n_err += 1;
                 app_handle.emit("install-output", format!("✕ {pkg} update failed.")).ok();
             }
             app_handle.emit("pkg-done", crate::PkgDoneEvent {
                 name: pkg.clone(),
-                status: if ok { "success" } else { "error" }.into(),
+                status: if ok { "success" } else if app_running { "app-running" } else { "error" }.into(),
             }).ok();
         }
 
