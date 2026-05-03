@@ -19,7 +19,7 @@ Pick the `.exe` (NSIS installer) for normal use, or the `.msi` for enterprise / 
 
 > **Requires Windows 10/11 (x64).** UAC prompt on launch is expected — Brewinget runs elevated so winget operations never ask for credentials mid-session.
 
-![Brewinget welcome screen](path/to/welcome-screenshot.png)
+<img width="826" height="564" alt="Brewwinget-frontpage" src="https://github.com/user-attachments/assets/352e0ed0-9192-4e6e-9aa9-50ee66174dcb" />
 
 ---
 
@@ -48,8 +48,8 @@ Pick the `.exe` (NSIS installer) for normal use, or the `.msi` for enterprise / 
 - Streaming log output for every operation
 - Fully offline — no telemetry, no update checks, no network calls except to winget
 
-![Installed packages](path/to/installed-screenshot.png)
-![Update All queue](path/to/queue-screenshot.png)
+<img width="825" height="673" alt="Brewwinget-installed" src="https://github.com/user-attachments/assets/afd28678-8144-4a4e-a889-51238dc96e44" />
+<img width="828" height="672" alt="Brewwinget-update-all" src="https://github.com/user-attachments/assets/e4766336-7cfc-4081-b372-68d441e8e10b" />
 
 ---
 
