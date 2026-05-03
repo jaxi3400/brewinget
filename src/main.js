@@ -55,20 +55,52 @@ silentDefaultToggle.addEventListener('change', () => {
 
 // ── Search ───────────────────────────────────────────────────────────────────
 
-const searchInput       = document.getElementById('search-input');
-const searchBtn         = document.getElementById('search-btn');
-const searchStatus      = document.getElementById('search-status');
-const searchToolbar     = document.getElementById('search-toolbar');
-const searchEmpty       = document.getElementById('search-empty');
-const resultsGrid       = document.getElementById('results-grid');
-const showMsStoreToggle = document.getElementById('show-msstore-toggle');
+const tabSearch          = document.getElementById('tab-search');
+const searchWelcome      = document.getElementById('search-welcome');
+const searchInputWelcome = document.getElementById('search-input-welcome');
+const searchBtnWelcome   = document.getElementById('search-btn-welcome');
+const searchInput        = document.getElementById('search-input');
+const searchBtn          = document.getElementById('search-btn');
+const searchStatus       = document.getElementById('search-status');
+const searchToolbar      = document.getElementById('search-toolbar');
+const resultsGrid        = document.getElementById('results-grid');
+const showMsStoreToggle  = document.getElementById('show-msstore-toggle');
 
 let allSearchResults = [];
 let lastQuery = '';
 
+// Compact bar (post-search)
 searchBtn.addEventListener('click', doSearch);
 searchInput.addEventListener('keydown', e => { if (e.key === 'Enter') doSearch(); });
 showMsStoreToggle.addEventListener('change', renderSearch);
+
+// Welcome bar + quick-picks
+searchBtnWelcome.addEventListener('click', doSearchFromWelcome);
+searchInputWelcome.addEventListener('keydown', e => { if (e.key === 'Enter') doSearchFromWelcome(); });
+document.querySelectorAll('.quick-pick').forEach(btn => {
+  btn.addEventListener('click', () => {
+    searchInputWelcome.value = btn.dataset.query;
+    doSearchFromWelcome();
+  });
+});
+
+function doSearchFromWelcome() {
+  searchInput.value = searchInputWelcome.value;
+  doSearch();
+}
+
+function transitionToSearched() {
+  if (tabSearch.classList.contains('searched')) return;
+  // Fade the welcome section out with an inline transition, then switch layouts.
+  searchWelcome.style.transition = 'opacity 0.22s ease, transform 0.22s ease';
+  searchWelcome.style.opacity    = '0';
+  searchWelcome.style.transform  = 'translateY(-10px)';
+  setTimeout(() => {
+    tabSearch.classList.add('searched');
+    searchWelcome.style.cssText = ''; // CSS now controls display: none
+    searchInput.focus();
+  }, 230);
+}
 
 function isMsStore(pkg) {
   return pkg.source === 'msstore' || /^[0-9A-Z]{9,13}$/.test(pkg.id);
@@ -78,9 +110,10 @@ async function doSearch() {
   const query = searchInput.value.trim();
   if (!query) return;
 
+  transitionToSearched(); // no-op after first search
   lastQuery = query;
-  searchBtn.disabled = true;
-  searchEmpty.classList.add('hidden');
+  searchBtn.disabled        = true;
+  searchBtnWelcome.disabled = true;
   searchToolbar.classList.remove('hidden');
   searchStatus.textContent = 'Searching…';
   showSkeletons(8);
@@ -97,7 +130,8 @@ async function doSearch() {
     resultsGrid.innerHTML = '';
     searchStatus.textContent = `Error: ${err}`;
   } finally {
-    searchBtn.disabled = false;
+    searchBtn.disabled        = false;
+    searchBtnWelcome.disabled = false;
   }
 }
 
@@ -678,8 +712,8 @@ document.addEventListener('keydown', e => {
   }
 });
 
-// Auto-focus the search field on launch
-searchInput.focus();
+// Auto-focus the welcome search field on launch
+searchInputWelcome.focus();
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
 

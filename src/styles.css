@@ -247,17 +247,103 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
   min-height: 24px;
 }
 
-/* ── Empty / initial state ── */
-.empty-state {
+/* ── Search tab: initial (welcome) state ── */
+/* Specificity (1,2,0) beats .tab-content.active (0,2,0) — no !important needed */
+#tab-search.active:not(.searched) {
   display: flex;
   flex-direction: column;
   align-items: center;
   justify-content: center;
-  padding: 80px 24px;
-  text-align: center;
+  padding: 0;
+  overflow: hidden;
 }
-.empty-title { font-size: 16px; font-weight: 500; color: var(--text);  margin-bottom: 8px; }
-.empty-sub   { font-size: 13px;                    color: var(--muted); }
+#tab-search:not(.searched) .search-compact { display: none; }
+#tab-search.searched       #search-welcome { display: none; }
+
+/* ── Welcome section ── */
+#search-welcome {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 18px;
+  width: 100%;
+  max-width: 580px;
+  padding: 48px 24px;
+}
+
+.search-welcome-logo {
+  font-size: 28px;
+  font-weight: 700;
+  color: var(--text);
+  letter-spacing: -0.5px;
+  line-height: 1;
+  margin: 0;
+}
+
+.search-welcome-tagline {
+  font-size: 14px;
+  color: var(--muted);
+  text-align: center;
+  margin: -6px 0 0;
+  line-height: 1.5;
+}
+
+.search-welcome-bar {
+  display: flex;
+  gap: 10px;
+  width: 100%;
+}
+
+.search-welcome-bar input {
+  flex: 1;
+  background: var(--card);
+  backdrop-filter: blur(20px);
+  -webkit-backdrop-filter: blur(20px);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  color: var(--text);
+  font-size: 16px;
+  padding: 14px 18px;
+  outline: none;
+  transition: border-color 0.2s ease, box-shadow 0.2s ease;
+}
+.search-welcome-bar input:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-dim);
+}
+.search-welcome-bar input::placeholder { color: var(--muted); }
+
+.search-welcome-bar button {
+  padding: 14px 22px;
+  font-size: 15px;
+  white-space: nowrap;
+}
+
+/* ── Quick-pick chips ── */
+.quick-picks {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  justify-content: center;
+  margin-top: -4px;
+}
+
+.quick-pick {
+  background: rgba(255,255,255,0.06);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+  color: var(--text-2);
+  font-size: 12px;
+  padding: 5px 14px;
+  box-shadow: none;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+.quick-pick:hover:not(:disabled) {
+  background: rgba(99,102,241,0.12);
+  border-color: rgba(99,102,241,0.35);
+  color: var(--text);
+  box-shadow: none;
+}
 
 /* ── Results grid ── */
 .results-grid {

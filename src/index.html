@@ -28,22 +28,39 @@
 
     <!-- Search Tab -->
     <section id="tab-search" class="tab-content active">
-      <div class="search-bar">
-        <input id="search-input" type="text" placeholder="Search for a package…" autocomplete="off" />
-        <button id="search-btn">Search</button>
+
+      <!-- Welcome state: visible before first search, centered -->
+      <div id="search-welcome">
+        <p class="search-welcome-logo">🍺 Brewinget</p>
+        <p class="search-welcome-tagline">Search winget and Microsoft Store</p>
+        <div class="search-welcome-bar">
+          <input id="search-input-welcome" type="text" placeholder="Search for a package…" autocomplete="off" />
+          <button id="search-btn-welcome">Search</button>
+        </div>
+        <div class="quick-picks">
+          <button class="quick-pick" data-query="Visual Studio Code">Visual Studio Code</button>
+          <button class="quick-pick" data-query="Firefox">Firefox</button>
+          <button class="quick-pick" data-query="Git.Git">Git</button>
+          <button class="quick-pick" data-query="PowerShell">PowerShell</button>
+        </div>
       </div>
-      <div class="search-toolbar hidden" id="search-toolbar">
-        <span id="search-status" class="status-msg"></span>
-        <label class="toggle-label">
-          <input type="checkbox" id="show-msstore-toggle" />
-          Show Microsoft Store results
-        </label>
+
+      <!-- Compact state: visible after first search, top-aligned -->
+      <div class="search-compact">
+        <div class="search-bar">
+          <input id="search-input" type="text" placeholder="Search for a package…" autocomplete="off" />
+          <button id="search-btn">Search</button>
+        </div>
+        <div class="search-toolbar hidden" id="search-toolbar">
+          <span id="search-status" class="status-msg"></span>
+          <label class="toggle-label">
+            <input type="checkbox" id="show-msstore-toggle" />
+            Show Microsoft Store results
+          </label>
+        </div>
+        <div id="results-grid" class="results-grid"></div>
       </div>
-      <div id="search-empty" class="empty-state">
-        <p class="empty-title">Search for an app to get started</p>
-        <p class="empty-sub">Try "Visual Studio Code", "Firefox", or "Git"</p>
-      </div>
-      <div id="results-grid" class="results-grid"></div>
+
     </section>
 
     <!-- Installed Tab -->
