@@ -173,6 +173,21 @@ pub fn update_all_packages_queued(
     });
 }
 
+pub fn uninstall_package(app_handle: tauri::AppHandle, package: String, silent: bool) {
+    std::thread::spawn(move || {
+        let mut cmd = Command::new(exe());
+        cmd.arg("uninstall").arg(&package);
+        if silent { cmd.arg("--quiet"); }
+        match cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn() {
+            Ok(child) => crate::run_streamed(app_handle, child),
+            Err(e) => {
+                app_handle.emit("install-output", format!("Error: {}", e)).ok();
+                app_handle.emit("install-complete", "error").ok();
+            }
+        }
+    });
+}
+
 pub fn update_all_packages(app_handle: tauri::AppHandle) {
     std::thread::spawn(move || {
         match Command::new(exe())

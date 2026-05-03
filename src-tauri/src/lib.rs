@@ -228,6 +228,11 @@ fn update_all_packages(app_handle: tauri::AppHandle) {
     pm::update_all_packages(app_handle);
 }
 
+#[tauri::command]
+fn uninstall_package(app_handle: tauri::AppHandle, package: String, silent: bool) {
+    pm::uninstall_package(app_handle, package, silent);
+}
+
 /// Start a per-package update queue. Resets skip/abort state, then hands off
 /// to the platform module which runs each package in sequence on a worker thread.
 #[tauri::command]
@@ -267,6 +272,7 @@ pub fn run() {
             update_all_packages_queued,
             skip_package,
             abort_update_all,
+            uninstall_package,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

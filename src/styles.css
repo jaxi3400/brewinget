@@ -575,6 +575,66 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
   color: #fff;
 }
 
+/* ── Uninstall button ── */
+.btn-uninstall {
+  background: none;
+  border: 1px solid transparent;
+  border-radius: 6px;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 4px 8px;
+  box-shadow: none;
+  line-height: 1;
+  transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+.btn-uninstall:hover:not(:disabled) {
+  background: rgba(248,113,113,0.10);
+  border-color: rgba(248,113,113,0.28);
+  color: var(--error);
+  box-shadow: none;
+}
+
+/* Inline confirmation strip that replaces the trash button */
+.uninstall-confirm {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.uninstall-confirm-label {
+  font-size: 12px;
+  color: var(--text-2);
+  white-space: nowrap;
+}
+.btn-uninstall-yes {
+  background: rgba(248,113,113,0.15);
+  border: 1px solid rgba(248,113,113,0.40);
+  color: var(--error);
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  box-shadow: none;
+}
+.btn-uninstall-yes:hover:not(:disabled) {
+  background: rgba(248,113,113,0.28);
+  border-color: rgba(248,113,113,0.65);
+  box-shadow: none;
+}
+.btn-uninstall-cancel {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--muted);
+  font-size: 11px;
+  padding: 3px 10px;
+  border-radius: 6px;
+  box-shadow: none;
+}
+.btn-uninstall-cancel:hover:not(:disabled) {
+  border-color: var(--border-h);
+  color: var(--text-2);
+  box-shadow: none;
+}
+
 /* ── Log modal ── */
 .log-backdrop {
   position: fixed;

@@ -273,6 +273,23 @@ pub fn update_package(app_handle: tauri::AppHandle, package: String, silent: boo
     });
 }
 
+pub fn uninstall_package(app_handle: tauri::AppHandle, package: String, silent: bool) {
+    std::thread::spawn(move || {
+        let args = ["uninstall", "--id", package.as_str(), "--exact"];
+        let mut cmd = winget(&args);
+        if silent {
+            cmd.arg("--silent").arg("--disable-interactivity");
+        }
+        match cmd.stdout(Stdio::piped()).stderr(Stdio::piped()).spawn() {
+            Ok(child) => crate::run_streamed(app_handle, child),
+            Err(e) => {
+                app_handle.emit("install-output", format!("Error: {}", e)).ok();
+                app_handle.emit("install-complete", "error").ok();
+            }
+        }
+    });
+}
+
 // ── Table parser ──────────────────────────────────────────────────────────────
 
 struct TableRow {

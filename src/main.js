@@ -303,6 +303,12 @@ function renderInstalled() {
       ? `<span class="version-arrow">→ ${escHtml(pkg.available)}</span>`
       : '';
 
+    // Non-ARP packages get an Uninstall button; ARP entries are registry
+    // artifacts that winget/brew cannot manage so we omit it for them.
+    const uninstallHtml = !pkg.isArp
+      ? `<button class="btn-uninstall" data-pkg="${escHtml(pkg.id)}" data-name="${escHtml(pkg.name)}">🗑</button>`
+      : '';
+
     row.innerHTML = `
       <td>
         <div class="pkg-name">${escHtml(pkg.name)}</div>
@@ -314,17 +320,18 @@ function renderInstalled() {
           ? '<span class="badge badge-update">⚠ Update available</span>'
           : '<span class="badge badge-ok">✓ Up to date</span>'
       }</td>
-      <td>${
-        pkg.hasUpdate
-          ? `<div class="row-actions">
-               <label class="silent-label">
-                 <input type="checkbox" class="silent-check"${getSilentDefault() ? ' checked' : ''}>
-                 Silent
-               </label>
-               <button class="btn-update" data-pkg="${escHtml(pkg.id)}">Update</button>
-             </div>`
-          : ''
-      }</td>
+      <td>
+        <div class="row-actions">
+          ${pkg.hasUpdate ? `
+            <label class="silent-label">
+              <input type="checkbox" class="silent-check"${getSilentDefault() ? ' checked' : ''}>
+              Silent
+            </label>
+            <button class="btn-update" data-pkg="${escHtml(pkg.id)}">Update</button>
+          ` : ''}
+          ${uninstallHtml}
+        </div>
+      </td>
     `;
     installedBody.appendChild(row);
   });
@@ -335,6 +342,73 @@ function renderInstalled() {
       openLog('update', btn.dataset.pkg, silent);
     });
   });
+
+  installedBody.querySelectorAll('.btn-uninstall').forEach(btn => {
+    btn.addEventListener('click', () => startUninstallConfirm(btn));
+  });
+}
+
+// ── Uninstall confirmation ────────────────────────────────────────────────────
+
+// Track auto-cancel timer so we can clear it if the user acts first.
+let uninstallCancelTimer = null;
+
+function clearUninstallConfirm(btn, originalHtml) {
+  clearTimeout(uninstallCancelTimer);
+  uninstallCancelTimer = null;
+  btn.outerHTML = originalHtml; // restore original button
+}
+
+function startUninstallConfirm(btn) {
+  const pkgId   = btn.dataset.pkg;
+  const pkgName = btn.dataset.name;
+  const row     = btn.closest('tr');
+  const silent  = row.querySelector('.silent-check')?.checked ?? getSilentDefault();
+
+  // Replace the trash button with an inline confirmation strip.
+  const originalHtml = btn.outerHTML;
+  const strip = document.createElement('span');
+  strip.className = 'uninstall-confirm';
+  strip.innerHTML = `
+    <span class="uninstall-confirm-label">Uninstall ${escHtml(pkgName)}?</span>
+    <button class="btn-uninstall-yes">Yes, uninstall</button>
+    <button class="btn-uninstall-cancel">Cancel</button>
+  `;
+  btn.replaceWith(strip);
+
+  // Auto-cancel after 10 seconds
+  uninstallCancelTimer = setTimeout(() => {
+    const current = row.querySelector('.uninstall-confirm');
+    if (current) current.outerHTML = originalHtml;
+    uninstallCancelTimer = null;
+  }, 10000);
+
+  // Cancel button
+  strip.querySelector('.btn-uninstall-cancel').addEventListener('click', e => {
+    e.stopPropagation();
+    clearTimeout(uninstallCancelTimer);
+    strip.outerHTML = originalHtml;
+  });
+
+  // Confirm button
+  strip.querySelector('.btn-uninstall-yes').addEventListener('click', e => {
+    e.stopPropagation();
+    clearTimeout(uninstallCancelTimer);
+    openLog('uninstall', pkgId, silent);
+  });
+
+  // Click outside → cancel
+  const outsideHandler = e => {
+    if (!strip.contains(e.target)) {
+      clearTimeout(uninstallCancelTimer);
+      const current = row.querySelector('.uninstall-confirm');
+      if (current) current.outerHTML = originalHtml;
+      document.removeEventListener('click', outsideHandler);
+    }
+  };
+  // defer one tick so the current click that opened the confirm doesn't
+  // immediately trigger the outside handler
+  setTimeout(() => document.addEventListener('click', outsideHandler), 0);
 }
 
 // ── Log modal ────────────────────────────────────────────────────────────────
@@ -353,7 +427,10 @@ logClose.addEventListener('click', closeLog);
 async function openLog(action, pkgName, silent = getSilentDefault()) {
   logOutput.textContent = '';
   logFooter.innerHTML = '<div class="spinner"></div> <span>Running…</span>';
-  logTitle.textContent = action === 'update' ? `Updating: ${pkgName}` : `Installing: ${pkgName}`;
+  logTitle.textContent =
+    action === 'update'     ? `Updating: ${pkgName}`     :
+    action === 'uninstall'  ? `Uninstalling: ${pkgName}` :
+                              `Installing: ${pkgName}`;
   logClose.disabled = true;
   logBackdrop.classList.remove('hidden');
 
@@ -369,9 +446,12 @@ async function openLog(action, pkgName, silent = getSilentDefault()) {
     logClose.disabled = false;
 
     if (event.payload === 'success') {
-      logFooter.innerHTML = '<span style="color: var(--success)">✓ Done!</span>';
-      // Refresh installed list if we're on that tab
-      if (document.getElementById('tab-installed').classList.contains('active')) {
+      logFooter.innerHTML = action === 'uninstall'
+        ? '<span style="color: var(--success)">✓ Uninstalled!</span>'
+        : '<span style="color: var(--success)">✓ Done!</span>';
+      // Refresh installed list after any operation that changes it
+      if (action === 'uninstall' ||
+          document.getElementById('tab-installed').classList.contains('active')) {
         loadInstalled();
       }
     } else if (event.payload === 'app-running') {
@@ -395,6 +475,8 @@ async function openLog(action, pkgName, silent = getSilentDefault()) {
   try {
     if (action === 'update') {
       await invoke('update_package', { package: pkgName, silent });
+    } else if (action === 'uninstall') {
+      await invoke('uninstall_package', { package: pkgName, silent });
     } else {
       await invoke('install_package', { package: pkgName, silent });
     }
@@ -569,10 +651,19 @@ async function openQueue(packages, silent) {
 // ── Keyboard shortcuts ───────────────────────────────────────────────────────
 
 document.addEventListener('keydown', e => {
-  // Escape: close modal if done, or clear the installed filter
+  // Escape: close modal if done, dismiss uninstall confirmation, or clear filter
   if (e.key === 'Escape') {
     if (!logBackdrop.classList.contains('hidden')) {
       if (!logClose.disabled) closeLog();
+      return;
+    }
+    // Dismiss any open uninstall confirmation strip
+    const confirm = document.querySelector('.uninstall-confirm');
+    if (confirm) {
+      clearTimeout(uninstallCancelTimer);
+      // Restore the original trash button by re-rendering the installed list.
+      // Simpler than tracking originalHtml across closures.
+      renderInstalled();
       return;
     }
     if (installedFilter.value) {
