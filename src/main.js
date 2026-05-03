@@ -306,7 +306,7 @@ function renderInstalled() {
     // Non-ARP packages get an Uninstall button; ARP entries are registry
     // artifacts that winget/brew cannot manage so we omit it for them.
     const uninstallHtml = !pkg.isArp
-      ? `<button class="btn-uninstall" data-pkg="${escHtml(pkg.id)}" data-name="${escHtml(pkg.name)}">🗑</button>`
+      ? `<button class="btn-uninstall" data-pkg="${escHtml(pkg.id)}" data-name="${escHtml(pkg.name)}">🗑 Uninstall</button>`
       : '';
 
     row.innerHTML = `
