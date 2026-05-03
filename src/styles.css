@@ -107,9 +107,19 @@ body::after {
 }
 
 .logo {
+  display: flex;
+  align-items: center;
+  gap: 8px;
   font-size: 15px;
   font-weight: 600;
   color: var(--text);
+  flex-shrink: 0;
+}
+
+.topbar-icon {
+  height: 24px;
+  width: 24px;
+  display: block;
   flex-shrink: 0;
 }
 
@@ -272,12 +282,24 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
 }
 
 .search-welcome-logo {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 14px;
+}
+
+.welcome-icon {
+  height: 72px;
+  width: 72px;
+  display: block;
+}
+
+.search-welcome-logo span {
   font-size: 28px;
   font-weight: 700;
   color: var(--text);
   letter-spacing: -0.5px;
   line-height: 1;
-  margin: 0;
 }
 
 .search-welcome-tagline {

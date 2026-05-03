@@ -10,7 +10,7 @@
   <div class="app">
 
     <header class="topbar" data-tauri-drag-region>
-      <span class="logo">🍺 Brewinget</span>
+      <span class="logo"><img src="icon.png" class="topbar-icon" alt="" />Brewinget</span>
       <nav class="tabs">
         <button class="tab active" data-tab="search">Search</button>
         <button class="tab" data-tab="installed">Installed</button>
@@ -31,7 +31,10 @@
 
       <!-- Welcome state: visible before first search, centered -->
       <div id="search-welcome">
-        <p class="search-welcome-logo">🍺 Brewinget</p>
+        <div class="search-welcome-logo">
+          <img src="icon.png" class="welcome-icon" alt="" />
+          <span>Brewinget</span>
+        </div>
         <p class="search-welcome-tagline">Search winget and Microsoft Store</p>
         <div class="search-welcome-bar">
           <input id="search-input-welcome" type="text" placeholder="Search for a package…" autocomplete="off" />
