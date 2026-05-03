@@ -455,10 +455,7 @@ async function openLog(action, pkgName, silent = getSilentDefault()) {
         loadInstalled();
       }
     } else if (event.payload === 'app-running') {
-      const isSelf = /brewinget/i.test(pkgName);
-      const msg = isSelf
-        ? 'Brewinget needs to be closed to update itself. Restart from a fresh launch and try again.'
-        : 'The app is running — close it, then retry.';
+      const msg = appRunningMessage(pkgName, /* short */ false);
       logFooter.innerHTML = `
         <span style="color:var(--warning)">⚠ ${escHtml(msg)}</span>
         <button class="btn-retry" id="log-retry-btn">Retry</button>
@@ -616,7 +613,7 @@ async function openQueue(packages, silent) {
     } else if (status === 'app-running') {
       const hint = document.createElement('span');
       hint.className = 'qi-app-running-hint';
-      hint.textContent = 'Close the app to update';
+      hint.textContent = appRunningMessage(name, /* short */ true);
       li.querySelector('.qi-info').appendChild(hint);
 
       const retryBtn = document.createElement('button');
@@ -685,6 +682,50 @@ document.addEventListener('keydown', e => {
 searchInput.focus();
 
 // ── Helpers ──────────────────────────────────────────────────────────────────
+
+// Per-app hints for the "app is running" failure state.
+// Keys are lowercase substrings of the package ID.
+const APP_RUNNING_HINTS = {
+  'microsoft.visualstudiocode': {
+    long:  'VS Code has background processes (language servers, extensions host). Close all VS Code windows, then check Task Manager for any remaining Code.exe processes.',
+    short: 'Close all VS Code windows + check Task Manager for Code.exe',
+  },
+  'google.chrome': {
+    long:  'Chrome runs in the background even after closing windows. Right-click the Chrome icon in the system tray and choose Exit, or end all Chrome.exe processes in Task Manager.',
+    short: 'Exit Chrome from the system tray or kill Chrome.exe in Task Manager',
+  },
+  'slacktechnologies.slack': {
+    long:  'Slack runs in the background. Right-click its system tray icon and choose Quit Slack, or end Slack.exe in Task Manager.',
+    short: 'Quit Slack from the system tray or kill Slack.exe in Task Manager',
+  },
+  'microsoft.teams': {
+    long:  'Teams runs in the background. Right-click its system tray icon and choose Quit, or end all Teams.exe processes in Task Manager.',
+    short: 'Quit Teams from the system tray or kill Teams.exe in Task Manager',
+  },
+  'discord.discord': {
+    long:  'Discord runs in the background. Right-click its system tray icon and choose Quit Discord, or end Discord.exe in Task Manager.',
+    short: 'Quit Discord from the system tray or kill Discord.exe in Task Manager',
+  },
+  'spotify.spotify': {
+    long:  'Spotify runs in the background. Right-click its system tray icon and choose Quit Spotify, or end Spotify.exe in Task Manager.',
+    short: 'Quit Spotify from the system tray or kill Spotify.exe in Task Manager',
+  },
+};
+
+function appRunningMessage(pkgId, short) {
+  if (/brewinget/i.test(pkgId)) {
+    return short
+      ? 'Restart Brewinget to update itself'
+      : 'Brewinget needs to be closed to update itself. Restart from a fresh launch and try again.';
+  }
+  const lower = pkgId.toLowerCase();
+  for (const [key, msgs] of Object.entries(APP_RUNNING_HINTS)) {
+    if (lower.includes(key)) return short ? msgs.short : msgs.long;
+  }
+  return short
+    ? 'Close all instances (check Task Manager for background processes)'
+    : 'The app or its background processes are still running. Close all instances and try again. Tip: check Task Manager — background processes like update helpers or language servers often survive window close.';
+}
 
 function escHtml(str) {
   return str.replace(/[&<>"']/g, c => ({

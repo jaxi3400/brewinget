@@ -80,7 +80,7 @@ pub(crate) fn detect_app_running(output: &str, exit_code: Option<i32>) -> bool {
     }
     let lower = output.to_lowercase();
     let keywords: &[&str] = &[
-        // English
+        // English (winget output + installer log phrases)
         "currently running",
         "in use",
         "close the application",
@@ -88,12 +88,16 @@ pub(crate) fn detect_app_running(output: &str, exit_code: Option<i32>) -> bool {
         "running process",
         "file is in use",
         "another instance",
-        // Danish (winget uses system locale)
+        "all instances",      // "close all instances of it"
+        "setup has detected", // Inno Setup: "Setup has detected that … is currently running"
+        // Danish (winget and installer logs use system locale)
         "kørende",
         "luk programmet",
         "er i brug",
         "er åben",
         "lukke programmet",
+        "kører i øjeblikket", // "is currently running" in Danish
+        "luk alle forekomster", // "close all instances" in Danish
     ];
     keywords.iter().any(|kw| lower.contains(kw))
 }

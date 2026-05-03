@@ -16,6 +16,68 @@ fn winget(args: &[&str]) -> Command {
     cmd
 }
 
+/// Scan winget output for "Installer log is available at: <path>" and return
+/// the path if found.  The captured lines may have trailing \r from the pipe.
+fn extract_installer_log_path(output: &str) -> Option<String> {
+    // winget emits this in its own locale too, so also match "log" loosely.
+    for line in output.lines() {
+        let trimmed = line.trim();
+        let lower = trimmed.to_lowercase();
+        // Primary winget format
+        if let Some(rest) = lower.strip_prefix("installer log is available at:") {
+            let path = trimmed[trimmed.len() - rest.len()..].trim();
+            if !path.is_empty() {
+                return Some(path.to_string());
+            }
+        }
+        // Alternate / future winget format
+        if lower.contains("installer log") && lower.contains(".log") {
+            if let Some(colon_pos) = trimmed.rfind(':') {
+                if colon_pos + 2 < trimmed.len() {
+                    let candidate = trimmed[colon_pos - 1..].trim(); // include drive letter
+                    if candidate.contains('\\') || candidate.contains('/') {
+                        return Some(candidate.to_string());
+                    }
+                }
+            }
+        }
+    }
+    None
+}
+
+/// Read the last `n` lines of an installer log file.
+/// Handles UTF-16 LE (BOM = 0xFF 0xFE), which is what MSI / Windows Installer
+/// writes.  Everything else is treated as UTF-8-lossy (covers Inno Setup,
+/// NSIS, and ANSI code-page logs — all ASCII keywords stay intact).
+fn read_installer_log_tail(path: &str, n: usize) -> Option<String> {
+    let bytes = std::fs::read(path).ok()?;
+    let text = if bytes.starts_with(&[0xFF, 0xFE]) {
+        // UTF-16 LE with BOM
+        let words: Vec<u16> = bytes[2..]
+            .chunks_exact(2)
+            .map(|c| u16::from_le_bytes([c[0], c[1]]))
+            .collect();
+        String::from_utf16_lossy(&words)
+    } else {
+        String::from_utf8_lossy(&bytes).into_owned()
+    };
+    let lines: Vec<&str> = text.lines().collect();
+    let start = lines.len().saturating_sub(n);
+    Some(lines[start..].join("\n"))
+}
+
+/// If `output` contains an installer log path, append the last 200 lines of
+/// that file to `output` so `detect_app_running` can inspect it.
+/// Silently does nothing if the file is absent, locked, or unreadable.
+fn augment_with_installer_log(output: &mut String) {
+    if let Some(path) = extract_installer_log_path(output) {
+        if let Some(tail) = read_installer_log_tail(&path, 200) {
+            output.push('\n');
+            output.push_str(&tail);
+        }
+    }
+}
+
 /// Spawn winget with base_args, optionally append silent flags, stream output.
 /// Returns (success, captured_output, exit_code). Does not emit install-complete.
 fn run_winget_op(
@@ -88,6 +150,7 @@ pub fn install_package(app_handle: tauri::AppHandle, package: String, silent: bo
             output.push_str(&output2);
             code = code2;
         }
+        if !ok { augment_with_installer_log(&mut output); }
         let status = if ok {
             "success"
         } else if crate::detect_app_running(&output, code) {
@@ -195,6 +258,7 @@ pub fn update_all_packages_queued(
                 output.push_str(&output2);
                 code = code2;
             }
+            if !ok { augment_with_installer_log(&mut output); }
 
             let app_running = !ok && crate::detect_app_running(&output, code);
             if ok {
@@ -262,6 +326,7 @@ pub fn update_package(app_handle: tauri::AppHandle, package: String, silent: boo
             output.push_str(&output2);
             code = code2;
         }
+        if !ok { augment_with_installer_log(&mut output); }
         let status = if ok {
             "success"
         } else if crate::detect_app_running(&output, code) {
