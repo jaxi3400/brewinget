@@ -17,6 +17,12 @@ app that feels native on Windows and macOS.
 filter/sort installed list · hide ARP registry entries · hide MS Store noise · update individual
 packages · update all packages at once · source badges · skeleton loading states.
 
+**Windows elevation:** Brewinget on Windows requires administrator privileges and requests them at
+launch via UAC (`requireAdministrator` in `src-tauri/brewinget.manifest`, embedded via `build.rs`).
+One UAC prompt at app start — no further prompts during use. macOS is unaffected.
+**Dev tip:** run `npm run tauri dev` from an already-elevated PowerShell terminal to avoid a UAC
+prompt on every hot-reload cycle.
+
 ---
 
 ## Architecture
