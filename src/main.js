@@ -375,10 +375,7 @@ function renderInstalled() {
         </div>
       </td>
       <td class="auto-update-cell">
-        ${!pkg.isArp ? `<label class="toggle-label auto-update-label">
-          <input type="checkbox" class="auto-update-check" data-pkg="${escHtml(pkg.id)}"${autoOn ? ' checked' : ''}>
-          Auto-update
-        </label>` : ''}
+        ${!pkg.isArp ? `<input type="checkbox" class="auto-update-check" data-pkg="${escHtml(pkg.id)}"${autoOn ? ' checked' : ''}>` : ''}
       </td>
     `;
     if (autoOn) row.classList.add('auto-update-on');

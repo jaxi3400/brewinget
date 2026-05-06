@@ -1039,9 +1039,16 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
 
 /* ── Auto-update column ── */
 .auto-update-th,
-.auto-update-cell { width: 110px; }
-
-.auto-update-label { font-size: 12px; }
+.auto-update-cell {
+  width: 72px;
+  text-align: center;
+}
+.auto-update-cell input[type="checkbox"] {
+  accent-color: var(--accent);
+  width: 15px;
+  height: 15px;
+  cursor: pointer;
+}
 
 /* Left-edge accent + faint tint — only when the toggle is ON */
 .installed-table tr.auto-update-on td:first-child {
