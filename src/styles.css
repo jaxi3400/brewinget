@@ -1038,10 +1038,13 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
 }
 
 /* ── Auto-update column ── */
-.auto-update-th,
+.auto-update-th {
+  white-space: nowrap;  /* prevent "AUTO-\nUPDATE" wrapping */
+  width: 1%;            /* shrink to content with table-layout:auto */
+}
 .auto-update-cell {
-  width: 72px;
   text-align: center;
+  white-space: nowrap;
 }
 .auto-update-cell input[type="checkbox"] {
   accent-color: var(--accent);
