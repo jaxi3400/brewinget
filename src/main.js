@@ -217,6 +217,7 @@ const installedFilter = document.getElementById('installed-filter');
 const showArpToggle   = document.getElementById('show-arp-toggle');
 
 let allInstalled = [];
+let autoUpdatePrefs = {}; // { [packageId]: true } — only enabled entries are stored
 let sortCol = null;   // null = default (updates first, then alpha)
 let sortDir = 1;      // 1 = asc, -1 = desc
 
@@ -252,7 +253,12 @@ async function loadInstalled() {
   showInstalledSkeletons(12);
 
   try {
-    allInstalled = await invoke('list_installed');
+    const [installed, rawPrefs] = await Promise.all([
+      invoke('list_installed'),
+      invoke('get_auto_update_prefs').catch(() => ({})),
+    ]);
+    allInstalled = installed;
+    autoUpdatePrefs = rawPrefs;
     renderInstalled();
   } catch (err) {
     installedBody.innerHTML = '';
@@ -274,6 +280,7 @@ function showInstalledSkeletons(n) {
       </td>
       <td><div class="skel" style="height:13px;width:56px;border-radius:3px"></div></td>
       <td><div class="skel" style="height:20px;width:72px;border-radius:20px"></div></td>
+      <td></td>
       <td></td>
     `;
     installedBody.appendChild(row);
@@ -343,6 +350,7 @@ function renderInstalled() {
       ? `<button class="btn-uninstall" data-pkg="${escHtml(pkg.id)}" data-name="${escHtml(pkg.name)}">🗑 Uninstall</button>`
       : '';
 
+    const autoOn = !!autoUpdatePrefs[pkg.id];
     row.innerHTML = `
       <td>
         <div class="pkg-name">${escHtml(pkg.name)}</div>
@@ -366,7 +374,14 @@ function renderInstalled() {
           ${uninstallHtml}
         </div>
       </td>
+      <td class="auto-update-cell">
+        ${!pkg.isArp ? `<label class="toggle-label auto-update-label">
+          <input type="checkbox" class="auto-update-check" data-pkg="${escHtml(pkg.id)}"${autoOn ? ' checked' : ''}>
+          Auto-update
+        </label>` : ''}
+      </td>
     `;
+    if (autoOn) row.classList.add('auto-update-on');
     installedBody.appendChild(row);
   });
 
@@ -379,6 +394,24 @@ function renderInstalled() {
 
   installedBody.querySelectorAll('.btn-uninstall').forEach(btn => {
     btn.addEventListener('click', () => startUninstallConfirm(btn));
+  });
+
+  installedBody.querySelectorAll('.auto-update-check').forEach(cb => {
+    cb.addEventListener('change', async () => {
+      const pkgId  = cb.dataset.pkg;
+      const enabled = cb.checked;
+      // Optimistically update local state and row accent
+      if (enabled) { autoUpdatePrefs[pkgId] = true; } else { delete autoUpdatePrefs[pkgId]; }
+      cb.closest('tr').classList.toggle('auto-update-on', enabled);
+      try {
+        await invoke('set_auto_update_pref', { packageId: pkgId, enabled });
+      } catch {
+        // Revert on write failure
+        cb.checked = !enabled;
+        if (!enabled) { autoUpdatePrefs[pkgId] = true; } else { delete autoUpdatePrefs[pkgId]; }
+        cb.closest('tr').classList.toggle('auto-update-on', !enabled);
+      }
+    });
   });
 }
 
@@ -483,6 +516,10 @@ async function openLog(action, pkgName, silent = getSilentDefault()) {
       logFooter.innerHTML = action === 'uninstall'
         ? '<span style="color: var(--success)">✓ Uninstalled!</span>'
         : '<span style="color: var(--success)">✓ Done!</span>';
+      // Remove stale auto-update entry so the JSON doesn't accumulate dead entries
+      if (action === 'uninstall') {
+        invoke('set_auto_update_pref', { packageId: pkgName, enabled: false }).catch(() => {});
+      }
       // Refresh installed list after any operation that changes it
       if (action === 'uninstall' ||
           document.getElementById('tab-installed').classList.contains('active')) {

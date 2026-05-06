@@ -11,6 +11,8 @@ mod brew;
 #[cfg(target_os = "windows")]
 mod winget;
 
+mod prefs;
+
 // Module alias: `pm` always refers to the right backend for the current platform.
 #[cfg(target_os = "macos")]
 use brew as pm;
@@ -237,6 +239,25 @@ fn uninstall_package(app_handle: tauri::AppHandle, package: String, silent: bool
     pm::uninstall_package(app_handle, package, silent);
 }
 
+#[tauri::command]
+fn get_auto_update_prefs() -> Result<serde_json::Value, String> {
+    let prefs = prefs::load_auto_update();
+    serde_json::to_value(prefs).map_err(|e| e.to_string())
+}
+
+/// Setting enabled=false removes the entry entirely so the JSON doesn't
+/// accumulate dead entries for uninstalled or deselected packages.
+#[tauri::command]
+fn set_auto_update_pref(package_id: String, enabled: bool) -> Result<(), String> {
+    let mut prefs = prefs::load_auto_update();
+    if enabled {
+        prefs.insert(package_id, true);
+    } else {
+        prefs.remove(&package_id);
+    }
+    prefs::save_auto_update(&prefs)
+}
+
 /// Start a per-package update queue. Resets skip/abort state, then hands off
 /// to the platform module which runs each package in sequence on a worker thread.
 #[tauri::command]
@@ -277,6 +298,8 @@ pub fn run() {
             skip_package,
             abort_update_all,
             uninstall_package,
+            get_auto_update_prefs,
+            set_auto_update_pref,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

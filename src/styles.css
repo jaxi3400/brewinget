@@ -1037,6 +1037,20 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
   box-shadow: none;
 }
 
+/* ── Auto-update column ── */
+.auto-update-th,
+.auto-update-cell { width: 110px; }
+
+.auto-update-label { font-size: 12px; }
+
+/* Left-edge accent + faint tint — only when the toggle is ON */
+.installed-table tr.auto-update-on td:first-child {
+  border-left: 2px solid var(--accent);
+  padding-left: 14px; /* compensate for the 2px border */
+}
+.installed-table tr.auto-update-on td          { background: rgba(99,102,241,0.06); }
+.installed-table tr.auto-update-on:hover td    { background: rgba(99,102,241,0.11); }
+
 /* ── Queue log ── */
 .queue-log {
   flex: 1;
