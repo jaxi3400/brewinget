@@ -1038,11 +1038,13 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
 }
 
 /* ── Auto-update column ── */
-.auto-update-th {
+/* .installed-table th/td carry specificity (0,1,1); use (0,2,0) here to win */
+.installed-table .auto-update-th {
   white-space: nowrap;  /* prevent "AUTO-\nUPDATE" wrapping */
   width: 1%;            /* shrink to content with table-layout:auto */
+  text-align: center;
 }
-.auto-update-cell {
+.installed-table .auto-update-cell {
   text-align: center;
   white-space: nowrap;
 }
