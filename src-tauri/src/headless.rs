@@ -8,6 +8,7 @@ const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
 enum Outcome {
     Success,
+    AlreadyCurrent,
     AppRunning,
     NetworkError,
     Error,
@@ -23,6 +24,21 @@ fn log_file_path() -> Result<PathBuf, ()> {
         .format("auto-update-%Y-%m-%d-%H-%M-%S.log")
         .to_string();
     Ok(logs_dir()?.join(name))
+}
+
+fn detect_already_current(output: &str) -> bool {
+    let lower = output.to_lowercase();
+    [
+        "no available upgrade found",
+        "no newer package versions are available",
+        "no applicable upgrade found",
+        "already installed to the latest",
+        // Danish
+        "ingen tilgængelig opgradering",
+        "ingen nyere pakkeversioner er tilgængelige",
+    ]
+    .iter()
+    .any(|kw| lower.contains(kw))
 }
 
 // winget error messages for network failures (English and Danish)
@@ -80,6 +96,8 @@ fn upgrade_package(pkg: &str, log: &mut dyn Write) -> Outcome {
             let code = o.status.code();
             if o.status.success() {
                 Outcome::Success
+            } else if detect_already_current(&combined) {
+                Outcome::AlreadyCurrent
             } else if crate::detect_app_running(&combined, code) {
                 Outcome::AppRunning
             } else if detect_network_error(&combined) {
@@ -139,6 +157,7 @@ pub fn run() {
 
     let total = flagged.len();
     let mut n_ok = 0usize;
+    let mut n_current = 0usize;
     let mut n_err = 0usize;
 
     for (i, pkg) in flagged.iter().enumerate() {
@@ -147,6 +166,10 @@ pub fn run() {
             Outcome::Success => {
                 n_ok += 1;
                 writeln!(log, "  ✓ Updated.").ok();
+            }
+            Outcome::AlreadyCurrent => {
+                n_current += 1;
+                writeln!(log, "  ⓘ Already up to date.").ok();
             }
             Outcome::AppRunning => {
                 n_err += 1;
@@ -164,5 +187,10 @@ pub fn run() {
         writeln!(log).ok();
     }
 
-    writeln!(log, "── Summary: {n_ok} updated, {n_err} failed/skipped ──").ok();
+    // Only show "already current" count when it's non-zero so quiet runs stay quiet.
+    if n_current > 0 {
+        writeln!(log, "── Summary: {n_ok} updated, {n_current} already current, {n_err} failed/skipped ──").ok();
+    } else {
+        writeln!(log, "── Summary: {n_ok} updated, {n_err} failed/skipped ──").ok();
+    }
 }
