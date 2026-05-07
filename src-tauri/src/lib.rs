@@ -11,6 +11,9 @@ mod brew;
 #[cfg(target_os = "windows")]
 mod winget;
 
+#[cfg(target_os = "windows")]
+mod headless;
+
 mod prefs;
 
 // Module alias: `pm` always refers to the right backend for the current platform.
@@ -282,6 +285,11 @@ fn skip_package(pkg: String, ctrl: tauri::State<'_, Arc<QueueControl>>) {
 #[tauri::command]
 fn abort_update_all(ctrl: tauri::State<'_, Arc<QueueControl>>) {
     ctrl.set_abort();
+}
+
+pub fn run_headless() {
+    #[cfg(target_os = "windows")]
+    headless::run();
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
