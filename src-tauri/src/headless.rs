@@ -117,6 +117,14 @@ pub fn run() {
     writeln!(log, "{}", "─".repeat(60)).ok();
     writeln!(log).ok();
 
+    // Skip gracefully if the UI is already open — avoids concurrent winget calls
+    // fighting over the same packages and polluting the UI's log modal.
+    if crate::mutex::ui_is_running() {
+        writeln!(log, "Brewinget UI is open — skipping auto-update to avoid conflicts.").ok();
+        writeln!(log, "The scheduled task will try again at its next run.").ok();
+        return;
+    }
+
     let prefs = crate::prefs::load_auto_update();
     let mut flagged: Vec<String> = prefs.into_keys().collect();
     flagged.sort(); // deterministic order across runs

@@ -13,6 +13,8 @@ mod winget;
 
 #[cfg(target_os = "windows")]
 mod headless;
+#[cfg(target_os = "windows")]
+mod mutex;
 
 mod prefs;
 
@@ -294,6 +296,9 @@ pub fn run_headless() {
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
+    #[cfg(target_os = "windows")]
+    mutex::acquire_ui_mutex();
+
     tauri::Builder::default()
         .manage(Arc::new(QueueControl::new()))
         .invoke_handler(tauri::generate_handler![
