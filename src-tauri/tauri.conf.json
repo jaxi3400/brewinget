@@ -33,6 +33,11 @@
       "icons/icon.png",
       "icons/icon.ico",
       "icons/icon.icns"
-    ]
+    ],
+    "windows": {
+      "nsis": {
+        "installerHooks": "nsis-hooks.nsh"
+      }
+    }
   }
 }
