@@ -112,24 +112,41 @@ fn upgrade_package(pkg: &str, log: &mut dyn Write) -> Outcome {
 
 // Writes each line to a log file AND emits it as a Tauri install-output event.
 // Used by run_live so the UI log modal shows progress in real time.
+//
+// Rust's write!/writeln! macros call Write::write once per format *fragment*,
+// not once per complete line.  We therefore buffer bytes internally and only
+// emit when a newline character arrives, which is the same granularity that
+// BufReader::lines() gives the streaming commands in lib.rs.
 struct DualWriter {
     file: fs::File,
     app: AppHandle,
+    line_buf: String,
 }
 
 impl Write for DualWriter {
     fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
         let _ = self.file.write(buf);
         if let Ok(s) = std::str::from_utf8(buf) {
-            let line = s.trim_end();
-            if !line.is_empty() {
-                self.app.emit("install-output", line).ok();
+            self.line_buf.push_str(s);
+            // Drain and emit every complete line that has accumulated.
+            while let Some(pos) = self.line_buf.find('\n') {
+                let line = self.line_buf[..pos].trim_end_matches('\r').to_string();
+                self.line_buf.drain(..=pos);
+                if !line.is_empty() {
+                    self.app.emit("install-output", &line).ok();
+                }
             }
         }
         Ok(buf.len())
     }
     fn flush(&mut self) -> std::io::Result<()> {
         let _ = self.file.flush();
+        // Emit any trailing content that arrived without a final newline.
+        let remaining = self.line_buf.trim().to_string();
+        if !remaining.is_empty() {
+            self.app.emit("install-output", &remaining).ok();
+            self.line_buf.clear();
+        }
         Ok(())
     }
 }
@@ -159,7 +176,7 @@ pub fn run_live(app: AppHandle) {
                 return;
             }
         };
-        let mut log = DualWriter { file, app: app.clone() };
+        let mut log = DualWriter { file, app: app.clone(), line_buf: String::new() };
 
         writeln!(
             log,
