@@ -3,6 +3,7 @@ use std::io::Write;
 use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
 use std::process::Command;
+use tauri::{AppHandle, Emitter};
 
 const CREATE_NO_WINDOW: u32 = 0x0800_0000;
 
@@ -107,6 +108,125 @@ fn upgrade_package(pkg: &str, log: &mut dyn Write) -> Outcome {
             }
         }
     }
+}
+
+// Writes each line to a log file AND emits it as a Tauri install-output event.
+// Used by run_live so the UI log modal shows progress in real time.
+struct DualWriter {
+    file: fs::File,
+    app: AppHandle,
+}
+
+impl Write for DualWriter {
+    fn write(&mut self, buf: &[u8]) -> std::io::Result<usize> {
+        let _ = self.file.write(buf);
+        if let Ok(s) = std::str::from_utf8(buf) {
+            let line = s.trim_end();
+            if !line.is_empty() {
+                self.app.emit("install-output", line).ok();
+            }
+        }
+        Ok(buf.len())
+    }
+    fn flush(&mut self) -> std::io::Result<()> {
+        let _ = self.file.flush();
+        Ok(())
+    }
+}
+
+/// Run the auto-update logic interactively: writes to a log file AND streams
+/// each output line to the UI via install-output events.  Emits install-complete
+/// when done so the log modal closes properly.  Spawns a background thread.
+pub fn run_live(app: AppHandle) {
+    std::thread::spawn(move || {
+        let log_path = match log_file_path() {
+            Ok(p) => p,
+            Err(_) => {
+                app.emit("install-complete", "error").ok();
+                return;
+            }
+        };
+        if let Some(parent) = log_path.parent() {
+            if fs::create_dir_all(parent).is_err() {
+                app.emit("install-complete", "error").ok();
+                return;
+            }
+        }
+        let file = match fs::File::create(&log_path) {
+            Ok(f) => f,
+            Err(_) => {
+                app.emit("install-complete", "error").ok();
+                return;
+            }
+        };
+        let mut log = DualWriter { file, app: app.clone() };
+
+        writeln!(
+            log,
+            "Brewinget auto-update — {}",
+            chrono::Local::now().format("%Y-%m-%d %H:%M:%S")
+        )
+        .ok();
+        writeln!(log, "{}", "─".repeat(60)).ok();
+        writeln!(log).ok();
+
+        let prefs = crate::prefs::load_auto_update();
+        let mut flagged: Vec<String> = prefs.into_keys().collect();
+        flagged.sort();
+
+        if flagged.is_empty() {
+            writeln!(log, "No packages flagged for auto-update. Nothing to do.").ok();
+            app.emit("install-complete", "success").ok();
+            return;
+        }
+
+        writeln!(log, "Packages queued: {}", flagged.join(", ")).ok();
+        writeln!(log).ok();
+
+        let total = flagged.len();
+        let mut n_ok = 0usize;
+        let mut n_current = 0usize;
+        let mut n_err = 0usize;
+
+        for (i, pkg) in flagged.iter().enumerate() {
+            writeln!(log, "── [{}/{}] {pkg} ──", i + 1, total).ok();
+            match upgrade_package(pkg, &mut log) {
+                Outcome::Success => {
+                    n_ok += 1;
+                    writeln!(log, "  ✓ Updated.").ok();
+                }
+                Outcome::AlreadyCurrent => {
+                    n_current += 1;
+                    writeln!(log, "  ⓘ Already up to date.").ok();
+                }
+                Outcome::AppRunning => {
+                    n_err += 1;
+                    writeln!(log, "  ⚠  Skipped — application is running.").ok();
+                }
+                Outcome::NetworkError => {
+                    n_err += 1;
+                    writeln!(log, "  ✕ Network unavailable.").ok();
+                }
+                Outcome::Error => {
+                    n_err += 1;
+                    writeln!(log, "  ✕ Update failed.").ok();
+                }
+            }
+            writeln!(log).ok();
+        }
+
+        if n_current > 0 {
+            writeln!(
+                log,
+                "── Summary: {n_ok} updated, {n_current} already current, {n_err} failed/skipped ──"
+            )
+            .ok();
+        } else {
+            writeln!(log, "── Summary: {n_ok} updated, {n_err} failed/skipped ──").ok();
+        }
+
+        app.emit("install-complete", "success").ok();
+    });
 }
 
 pub fn run() {

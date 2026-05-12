@@ -1076,3 +1076,201 @@ button:disabled               { opacity: 0.35; cursor: not-allowed; }
   white-space: pre-wrap;
   word-break: break-all;
 }
+
+/* ══ Settings modal ═════════════════════════════════════════════════════════ */
+
+/* Gear button in the topbar */
+.topbar-gear-btn {
+  background: none;
+  border: none;
+  color: var(--muted);
+  font-size: 17px;
+  padding: 5px 7px;
+  border-radius: 6px;
+  cursor: pointer;
+  box-shadow: none;
+  flex-shrink: 0;
+  line-height: 1;
+  transition: background 0.15s, color 0.15s;
+}
+.topbar-gear-btn:hover:not(:disabled) {
+  background: rgba(255,255,255,0.08);
+  color: var(--text);
+  box-shadow: none;
+}
+.topbar-gear-btn:active:not(:disabled) { transform: scale(0.97); }
+
+/* Modal size override — narrower than the log modal */
+.settings-modal {
+  width: min(460px, 92vw);
+  max-height: 80vh;
+}
+
+.settings-body {
+  padding: 20px 24px 24px;
+  display: flex;
+  flex-direction: column;
+  gap: 18px;
+  overflow-y: auto;
+}
+
+/* "Enable scheduled auto-updates" master toggle row */
+.settings-master-toggle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text);
+  cursor: pointer;
+  padding: 12px 14px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  user-select: none;
+  transition: border-color 0.2s, background 0.2s;
+}
+.settings-master-toggle:hover { border-color: var(--border-h); }
+.settings-master-toggle input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--accent);
+  cursor: pointer;
+  flex-shrink: 0;
+}
+
+/* Collapsible options block below the master toggle */
+.schedule-fields {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  transition: opacity 0.2s;
+}
+.schedule-fields.disabled {
+  opacity: 0.38;
+  pointer-events: none;
+}
+
+/* Individual option row: label + controls side by side */
+.settings-row {
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+.settings-label {
+  min-width: 72px;
+  font-size: 13px;
+  color: var(--text-2);
+  flex-shrink: 0;
+}
+.schedule-controls {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.schedule-controls select {
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 5px 10px;
+  border-radius: 6px;
+  font-size: 13px;
+  cursor: pointer;
+  outline: none;
+  box-shadow: none;
+  transition: border-color 0.15s;
+}
+.schedule-controls select:focus { border-color: var(--accent); }
+
+/* Custom interval: "every __ hours" */
+.schedule-interval {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 13px;
+  color: var(--text-2);
+}
+.schedule-interval input[type="number"] {
+  width: 62px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  text-align: center;
+  outline: none;
+  box-shadow: none;
+  transition: border-color 0.15s;
+}
+.schedule-interval input[type="number"]:focus { border-color: var(--accent); }
+
+/* HH : MM time inputs */
+.time-input {
+  width: 52px;
+  background: var(--card);
+  border: 1px solid var(--border);
+  color: var(--text);
+  padding: 5px 8px;
+  border-radius: 6px;
+  font-size: 13px;
+  text-align: center;
+  outline: none;
+  box-shadow: none;
+  transition: border-color 0.15s;
+}
+.time-input:focus { border-color: var(--accent); }
+.time-sep { color: var(--muted); font-size: 15px; line-height: 1; }
+
+/* "Next run: ..." or error line */
+.settings-status { font-size: 13px; min-height: 20px; }
+
+/* Button row at the bottom of the modal */
+.settings-actions {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+  align-items: center;
+}
+
+.btn-settings-save {
+  /* inherits global accent gradient */
+  padding: 7px 16px;
+  font-size: 13px;
+}
+
+.btn-settings-run {
+  background: rgba(52,211,153,0.10);
+  border: 1px solid rgba(52,211,153,0.28);
+  color: var(--success);
+  padding: 7px 14px;
+  font-size: 13px;
+  box-shadow: none;
+  border-radius: var(--radius);
+  transition: background 0.15s, border-color 0.15s;
+}
+.btn-settings-run:hover:not(:disabled) {
+  background: rgba(52,211,153,0.20);
+  border-color: rgba(52,211,153,0.55);
+  box-shadow: none;
+}
+.btn-settings-run:active:not(:disabled) { transform: scale(0.97); }
+
+.btn-settings-secondary {
+  background: none;
+  border: 1px solid var(--border);
+  color: var(--text-2);
+  padding: 7px 14px;
+  font-size: 13px;
+  box-shadow: none;
+  border-radius: var(--radius);
+  transition: background 0.15s, border-color 0.15s, color 0.15s;
+}
+.btn-settings-secondary:hover:not(:disabled) {
+  background: rgba(255,255,255,0.05);
+  border-color: var(--border-h);
+  color: var(--text);
+  box-shadow: none;
+}
+.btn-settings-secondary:active:not(:disabled) { transform: scale(0.97); }

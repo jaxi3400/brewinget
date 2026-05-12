@@ -19,6 +19,7 @@
         <input type="checkbox" id="silent-default-toggle" />
         Silent installs
       </label>
+      <button class="topbar-gear-btn" id="settings-btn" title="Auto-update settings">⚙</button>
       <div class="win-controls">
         <button class="win-btn win-minimize" title="Minimize">&#x2212;</button>
         <button class="win-btn win-maximize" title="Maximize / Restore">&#x25A1;</button>
@@ -94,7 +95,7 @@
                 <th data-sort="version">Version <span class="sort-ind"></span></th>
                 <th data-sort="status">Status <span class="sort-ind"></span></th>
                 <th>Actions</th>
-                <th class="auto-update-th" title="Apps with auto-update enabled will be updated automatically when a scheduled task runs. Configure the schedule in Settings (coming in a future update).">Auto-update</th>
+                <th class="auto-update-th" title="Apps with auto-update enabled will be updated automatically when a scheduled task runs. Configure the schedule via the ⚙ Settings button.">Auto-update</th>
               </tr>
             </thead>
             <tbody id="installed-body"></tbody>
@@ -128,6 +129,72 @@
       </div>
       <pre id="log-output" class="log-output"></pre>
       <div id="log-footer" class="log-footer"></div>
+    </div>
+  </div>
+
+  <!-- Settings modal -->
+  <div id="settings-backdrop" class="log-backdrop hidden">
+    <div class="log-modal settings-modal">
+      <div class="log-header">
+        <span>Auto-update Settings</span>
+        <button id="settings-close" class="log-close">✕</button>
+      </div>
+      <div class="settings-body">
+
+        <label class="settings-master-toggle">
+          <input type="checkbox" id="schedule-enabled" />
+          <span>Enable scheduled auto-updates</span>
+        </label>
+
+        <div id="schedule-fields" class="schedule-fields">
+
+          <div class="settings-row">
+            <span class="settings-label">Frequency</span>
+            <div class="schedule-controls">
+              <select id="schedule-frequency">
+                <option value="daily">Daily</option>
+                <option value="weekly">Weekly</option>
+                <option value="custom">Custom interval</option>
+              </select>
+              <select id="schedule-day-of-week" class="hidden">
+                <option value="0">Sunday</option>
+                <option value="1">Monday</option>
+                <option value="2">Tuesday</option>
+                <option value="3">Wednesday</option>
+                <option value="4">Thursday</option>
+                <option value="5">Friday</option>
+                <option value="6">Saturday</option>
+              </select>
+              <div id="schedule-interval-wrap" class="hidden schedule-interval">
+                <span>every</span>
+                <input type="number" id="schedule-interval-hours" min="1" max="168" value="12" />
+                <span>hours</span>
+              </div>
+            </div>
+          </div>
+
+          <div id="schedule-time-row" class="settings-row">
+            <span class="settings-label">Time</span>
+            <div class="schedule-controls">
+              <input type="number" id="schedule-hour" min="0" max="23" value="2" class="time-input" />
+              <span class="time-sep">:</span>
+              <input type="number" id="schedule-minute" min="0" max="59" value="0" class="time-input" />
+            </div>
+          </div>
+
+        </div>
+
+        <div class="settings-status">
+          <span id="schedule-next-run" class="muted"></span>
+        </div>
+
+        <div class="settings-actions">
+          <button id="settings-save-btn" class="btn-settings-save">Save schedule</button>
+          <button id="run-now-btn" class="btn-settings-run">▶ Run now</button>
+          <button id="open-logs-btn" class="btn-settings-secondary">📂 Open logs folder</button>
+        </div>
+
+      </div>
     </div>
   </div>
 

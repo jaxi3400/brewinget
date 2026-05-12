@@ -15,6 +15,8 @@ mod winget;
 mod headless;
 #[cfg(target_os = "windows")]
 mod mutex;
+#[cfg(target_os = "windows")]
+mod schedule;
 
 mod prefs;
 
@@ -289,6 +291,58 @@ fn abort_update_all(ctrl: tauri::State<'_, Arc<QueueControl>>) {
     ctrl.set_abort();
 }
 
+/// Returns the persisted schedule config.  Windows only; macOS returns an error.
+#[tauri::command]
+fn get_schedule_config() -> Result<serde_json::Value, String> {
+    #[cfg(not(target_os = "windows"))]
+    return Err("Scheduled updates are only available on Windows".to_string());
+
+    #[cfg(target_os = "windows")]
+    {
+        let config = schedule::load();
+        serde_json::to_value(&config).map_err(|e| e.to_string())
+    }
+}
+
+/// Persist schedule config and create/delete the Windows Scheduled Task accordingly.
+#[tauri::command]
+fn save_schedule_config(config: serde_json::Value) -> Result<(), String> {
+    #[cfg(not(target_os = "windows"))]
+    return Err("Scheduled updates are only available on Windows".to_string());
+
+    #[cfg(target_os = "windows")]
+    {
+        let cfg: schedule::ScheduleConfig =
+            serde_json::from_value(config).map_err(|e| e.to_string())?;
+        schedule::save(&cfg)
+    }
+}
+
+/// Run the auto-update logic immediately, streaming output to the UI log modal.
+#[tauri::command]
+fn run_auto_update_now(app_handle: tauri::AppHandle) {
+    #[cfg(target_os = "windows")]
+    headless::run_live(app_handle);
+
+    #[cfg(not(target_os = "windows"))]
+    {
+        app_handle
+            .emit("install-output", "Auto-updates are only available on Windows.")
+            .ok();
+        app_handle.emit("install-complete", "error").ok();
+    }
+}
+
+/// Open the Brewinget logs folder in the OS file manager.
+#[tauri::command]
+fn open_logs_folder() -> Result<(), String> {
+    #[cfg(not(target_os = "windows"))]
+    return Err("Not supported on this platform".to_string());
+
+    #[cfg(target_os = "windows")]
+    schedule::open_logs_folder()
+}
+
 pub fn run_headless() {
     #[cfg(target_os = "windows")]
     headless::run();
@@ -313,6 +367,10 @@ pub fn run() {
             uninstall_package,
             get_auto_update_prefs,
             set_auto_update_pref,
+            get_schedule_config,
+            save_schedule_config,
+            run_auto_update_now,
+            open_logs_folder,
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

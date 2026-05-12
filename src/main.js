@@ -492,9 +492,10 @@ async function openLog(action, pkgName, silent = getSilentDefault()) {
   logOutput.textContent = '';
   logFooter.innerHTML = '<div class="spinner"></div> <span>Running…</span>';
   logTitle.textContent =
-    action === 'update'     ? `Updating: ${pkgName}`     :
-    action === 'uninstall'  ? `Uninstalling: ${pkgName}` :
-                              `Installing: ${pkgName}`;
+    action === 'update'       ? `Updating: ${pkgName}`     :
+    action === 'uninstall'    ? `Uninstalling: ${pkgName}` :
+    action === 'auto-update'  ? 'Running auto-updates…'    :
+                                `Installing: ${pkgName}`;
   logClose.disabled = true;
   logBackdrop.classList.remove('hidden');
 
@@ -518,7 +519,7 @@ async function openLog(action, pkgName, silent = getSilentDefault()) {
         invoke('set_auto_update_pref', { packageId: pkgName, enabled: false }).catch(() => {});
       }
       // Refresh installed list after any operation that changes it
-      if (action === 'uninstall' ||
+      if (action === 'uninstall' || action === 'auto-update' ||
           document.getElementById('tab-installed').classList.contains('active')) {
         loadInstalled();
       }
@@ -542,6 +543,8 @@ async function openLog(action, pkgName, silent = getSilentDefault()) {
       await invoke('update_package', { package: pkgName, silent });
     } else if (action === 'uninstall') {
       await invoke('uninstall_package', { package: pkgName, silent });
+    } else if (action === 'auto-update') {
+      await invoke('run_auto_update_now');
     } else {
       await invoke('install_package', { package: pkgName, silent });
     }
@@ -718,6 +721,10 @@ async function openQueue(packages, silent) {
 document.addEventListener('keydown', e => {
   // Escape: close modal if done, dismiss uninstall confirmation, or clear filter
   if (e.key === 'Escape') {
+    if (!settingsBackdrop.classList.contains('hidden')) {
+      closeSettings();
+      return;
+    }
     if (!logBackdrop.classList.contains('hidden')) {
       if (!logClose.disabled) closeLog();
       return;
@@ -800,3 +807,164 @@ function escHtml(str) {
     '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;'
   })[c]);
 }
+
+// ── Settings modal ───────────────────────────────────────────────────────────
+
+const settingsBackdrop     = document.getElementById('settings-backdrop');
+const settingsCloseBtn     = document.getElementById('settings-close');
+const settingsBtn          = document.getElementById('settings-btn');
+const scheduleEnabled      = document.getElementById('schedule-enabled');
+const scheduleFields       = document.getElementById('schedule-fields');
+const scheduleFrequency    = document.getElementById('schedule-frequency');
+const scheduleDayOfWeek    = document.getElementById('schedule-day-of-week');
+const scheduleIntervalWrap = document.getElementById('schedule-interval-wrap');
+const scheduleIntervalHrs  = document.getElementById('schedule-interval-hours');
+const scheduleTimeRow      = document.getElementById('schedule-time-row');
+const scheduleHour         = document.getElementById('schedule-hour');
+const scheduleMinute       = document.getElementById('schedule-minute');
+const scheduleNextRun      = document.getElementById('schedule-next-run');
+const settingsSaveBtn      = document.getElementById('settings-save-btn');
+const runNowBtn            = document.getElementById('run-now-btn');
+const openLogsBtn          = document.getElementById('open-logs-btn');
+
+settingsBtn.addEventListener('click', openSettings);
+settingsCloseBtn.addEventListener('click', closeSettings);
+settingsBackdrop.addEventListener('click', e => {
+  if (e.target === settingsBackdrop) closeSettings();
+});
+
+scheduleEnabled.addEventListener('change', syncScheduleFieldsState);
+scheduleFrequency.addEventListener('change', syncFrequencyUI);
+
+settingsSaveBtn.addEventListener('click', saveSchedule);
+
+runNowBtn.addEventListener('click', () => {
+  closeSettings();
+  openLog('auto-update', '', false);
+});
+
+openLogsBtn.addEventListener('click', () => {
+  invoke('open_logs_folder').catch(err => {
+    scheduleNextRun.textContent = `Error: ${err}`;
+    scheduleNextRun.style.color = 'var(--error)';
+  });
+});
+
+function syncScheduleFieldsState() {
+  const on = scheduleEnabled.checked;
+  scheduleFields.classList.toggle('disabled', !on);
+  scheduleFields.querySelectorAll('input, select').forEach(el => { el.disabled = !on; });
+  updateNextRunDisplay();
+}
+
+function syncFrequencyUI() {
+  const freq = scheduleFrequency.value;
+  scheduleDayOfWeek.classList.toggle('hidden', freq !== 'weekly');
+  scheduleIntervalWrap.classList.toggle('hidden', freq !== 'custom');
+  scheduleTimeRow.classList.toggle('hidden', freq === 'custom');
+  updateNextRunDisplay();
+}
+
+function updateNextRunDisplay() {
+  if (!scheduleEnabled.checked) {
+    scheduleNextRun.textContent = '';
+    scheduleNextRun.style.color = '';
+    return;
+  }
+  const next = computeNextRun();
+  scheduleNextRun.textContent = next ? `Next run: ${formatDate(next)}` : '';
+  scheduleNextRun.style.color = '';
+}
+
+function computeNextRun() {
+  const freq  = scheduleFrequency.value;
+  const h     = parseInt(scheduleHour.value, 10) || 0;
+  const m     = parseInt(scheduleMinute.value, 10) || 0;
+  const now   = new Date();
+  let next;
+
+  if (freq === 'custom') {
+    const interval = parseInt(scheduleIntervalHrs.value, 10) || 12;
+    next = new Date(now.getTime() + interval * 3600000);
+  } else if (freq === 'weekly') {
+    const target = parseInt(scheduleDayOfWeek.value, 10);
+    next = new Date(now);
+    next.setHours(h, m, 0, 0);
+    const diff = (target - now.getDay() + 7) % 7;
+    if (diff === 0 && next <= now) {
+      next.setDate(next.getDate() + 7);
+    } else {
+      next.setDate(next.getDate() + diff);
+    }
+  } else {
+    next = new Date(now);
+    next.setHours(h, m, 0, 0);
+    if (next <= now) next.setDate(next.getDate() + 1);
+  }
+  return next;
+}
+
+function formatDate(d) {
+  const days   = ['Sun', 'Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat'];
+  const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun',
+                  'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+  const hh = String(d.getHours()).padStart(2, '0');
+  const mm = String(d.getMinutes()).padStart(2, '0');
+  return `${days[d.getDay()]}, ${d.getDate()} ${months[d.getMonth()]} ${d.getFullYear()} at ${hh}:${mm}`;
+}
+
+async function openSettings() {
+  // Reset status line
+  scheduleNextRun.textContent = '';
+  scheduleNextRun.style.color = '';
+
+  try {
+    const config = await invoke('get_schedule_config');
+    scheduleEnabled.checked     = !!config.enabled;
+    scheduleFrequency.value     = config.frequency  || 'daily';
+    scheduleDayOfWeek.value     = String(config.day_of_week ?? 1);
+    scheduleIntervalHrs.value   = config.interval_hours || 12;
+    scheduleHour.value          = config.hour   ?? 2;
+    scheduleMinute.value        = String(config.minute ?? 0).padStart(2, '0');
+  } catch {
+    // Leave defaults if the command fails (e.g. first launch)
+  }
+
+  syncScheduleFieldsState();
+  syncFrequencyUI();
+  settingsBackdrop.classList.remove('hidden');
+}
+
+function closeSettings() {
+  settingsBackdrop.classList.add('hidden');
+}
+
+async function saveSchedule() {
+  settingsSaveBtn.disabled    = true;
+  settingsSaveBtn.textContent = 'Saving…';
+
+  const config = {
+    enabled:        scheduleEnabled.checked,
+    frequency:      scheduleFrequency.value,
+    day_of_week:    parseInt(scheduleDayOfWeek.value, 10),
+    hour:           parseInt(scheduleHour.value, 10),
+    minute:         parseInt(scheduleMinute.value, 10),
+    interval_hours: parseInt(scheduleIntervalHrs.value, 10) || 12,
+  };
+
+  try {
+    await invoke('save_schedule_config', { config });
+    settingsSaveBtn.textContent = 'Saved ✓';
+    updateNextRunDisplay();
+    setTimeout(() => {
+      settingsSaveBtn.textContent = 'Save schedule';
+      settingsSaveBtn.disabled    = false;
+    }, 1500);
+  } catch (err) {
+    settingsSaveBtn.textContent = 'Save schedule';
+    settingsSaveBtn.disabled    = false;
+    scheduleNextRun.textContent = `Error: ${String(err)}`;
+    scheduleNextRun.style.color = 'var(--error)';
+  }
+}
+
