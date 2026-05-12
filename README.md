@@ -43,6 +43,16 @@ Pick the `.exe` (NSIS installer) for normal use, or the `.msi` for enterprise / 
 - Reads installer log files (UTF-8 + UTF-16 LE) to find the real failure reason
 - App-specific hints for VS Code, Chrome, Slack, Teams, Discord, Spotify
 
+### Auto-update (scheduled)
+- Flag individual apps for automatic updates — per-app granularity, not all-or-nothing
+- Choose a schedule: daily, weekly on a specific day, or a custom interval (e.g. every 12 hours)
+- Windows Task Scheduler integration — runs in the background even when Brewinget isn't open
+- Live log modal streams output when you trigger "Run Now" from the Settings panel
+- Self-healing on startup: if the scheduled task is orphaned (e.g. after an uninstall), Brewinget detects and fixes it automatically
+- Audit log at `%LOCALAPPDATA%\Brewinget\logs\` — one file per headless run, plus a rolling `cleanup.log`
+
+<!-- screenshots: settings modal, task scheduler entry, cleanup.log — add on GitHub Releases -->
+
 ### Reliability
 - Silent installs auto-retry without `--silent` if the installer doesn't support it
 - Streaming log output for every operation
