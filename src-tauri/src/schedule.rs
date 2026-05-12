@@ -119,36 +119,88 @@ fn create_task(config: &ScheduleConfig) -> Result<(), String> {
     run_ps(&script)
 }
 
-/// Called once at UI startup.  If the "Brewinget Auto-Update" scheduled task
-/// exists but its registered executable no longer exists on disk (e.g. the
-/// user uninstalled via a path the NSIS hook couldn't clean up), remove it so
-/// it doesn't sit orphaned in Task Scheduler.  Silent on all normal paths.
-pub fn startup_cleanup() {
+/// Returns the Execute path stored in the scheduled task, or None if the task
+/// doesn't exist or the query fails.
+fn query_task_exe() -> Option<String> {
     let script = format!(
         "$t = Get-ScheduledTask -TaskName '{TASK_NAME}' -ErrorAction SilentlyContinue; \
          if ($t) {{ $t.Actions[0].Execute }}"
     );
-
-    let out = match Command::new("powershell.exe")
+    let out = Command::new("powershell.exe")
         .creation_flags(CREATE_NO_WINDOW)
         .args(["-NonInteractive", "-NoProfile", "-Command", &script])
         .output()
-    {
-        Ok(o) => o,
-        Err(_) => return, // can't query — leave task alone
-    };
-
+        .ok()?;
     let raw = String::from_utf8_lossy(&out.stdout);
-    let path_str = raw.trim().trim_matches('"');
+    let path = raw.trim().trim_matches('"').to_string();
+    if path.is_empty() { None } else { Some(path) }
+}
 
-    // Empty → task doesn't exist, nothing to do.
-    if path_str.is_empty() {
-        return;
+/// Case-insensitive path comparison (Windows paths are case-insensitive).
+fn paths_equal(a: &str, b: &str) -> bool {
+    a.trim().trim_matches('"').to_lowercase() == b.trim().trim_matches('"').to_lowercase()
+}
+
+/// Append one timestamped line to the rolling cleanup log.
+fn append_cleanup_log(msg: &str) {
+    use std::io::Write as _;
+    let Ok(base) = std::env::var("LOCALAPPDATA") else { return };
+    let dir = PathBuf::from(base).join("Brewinget").join("logs");
+    let _ = std::fs::create_dir_all(&dir);
+    let line = format!(
+        "{} {}\n",
+        chrono::Local::now().format("%Y-%m-%d %H:%M:%S"),
+        msg
+    );
+    if let Ok(mut f) = std::fs::OpenOptions::new()
+        .create(true)
+        .append(true)
+        .open(dir.join("cleanup.log"))
+    {
+        let _ = f.write_all(line.as_bytes());
     }
+}
 
-    // Task exists. If the exe it points to is gone, it's an orphan — delete it.
-    if !std::path::Path::new(path_str).exists() {
-        let _ = delete_task();
+/// Called once at UI startup.  Reconciles the "Brewinget Auto-Update" scheduled
+/// task against the saved schedule config and the current exe path, then logs
+/// the decision to cleanup.log.
+///
+/// Case 1: enabled + task exists + path matches current exe  → no-op
+/// Case 2: enabled + task exists + path mismatch (orphan)    → delete + recreate
+/// Case 3: enabled + task missing                            → recreate
+/// Case 4: disabled + task exists                            → delete
+/// Case 5: disabled + task missing                           → no-op
+pub fn startup_cleanup() {
+    let config = load();
+    let task_exe = query_task_exe();
+    let current_exe = exe_path();
+
+    match (config.enabled, task_exe.as_deref()) {
+        (true, Some(te)) if paths_equal(te, &current_exe) => {
+            append_cleanup_log("no-op: task valid");
+        }
+        (true, Some(te)) => {
+            let _ = delete_task();
+            match create_task(&config) {
+                Ok(()) => append_cleanup_log(&format!("recreated: path mismatch (old={})", te)),
+                Err(e) => append_cleanup_log(&format!("recreate failed: {e}")),
+            }
+        }
+        (true, None) => {
+            match create_task(&config) {
+                Ok(()) => append_cleanup_log("recreated: task was missing"),
+                Err(e) => append_cleanup_log(&format!("recreate failed: {e}")),
+            }
+        }
+        (false, Some(_)) => {
+            match delete_task() {
+                Ok(()) => append_cleanup_log("deleted: schedule disabled"),
+                Err(e) => append_cleanup_log(&format!("delete failed: {e}")),
+            }
+        }
+        (false, None) => {
+            append_cleanup_log("no-op: schedule disabled");
+        }
     }
 }
 
