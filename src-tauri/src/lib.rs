@@ -353,6 +353,9 @@ pub fn run() {
     #[cfg(target_os = "windows")]
     mutex::acquire_ui_mutex();
 
+    #[cfg(target_os = "windows")]
+    schedule::startup_cleanup();
+
     tauri::Builder::default()
         .manage(Arc::new(QueueControl::new()))
         .invoke_handler(tauri::generate_handler![

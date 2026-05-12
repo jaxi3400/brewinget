@@ -119,6 +119,39 @@ fn create_task(config: &ScheduleConfig) -> Result<(), String> {
     run_ps(&script)
 }
 
+/// Called once at UI startup.  If the "Brewinget Auto-Update" scheduled task
+/// exists but its registered executable no longer exists on disk (e.g. the
+/// user uninstalled via a path the NSIS hook couldn't clean up), remove it so
+/// it doesn't sit orphaned in Task Scheduler.  Silent on all normal paths.
+pub fn startup_cleanup() {
+    let script = format!(
+        "$t = Get-ScheduledTask -TaskName '{TASK_NAME}' -ErrorAction SilentlyContinue; \
+         if ($t) {{ $t.Actions[0].Execute }}"
+    );
+
+    let out = match Command::new("powershell.exe")
+        .creation_flags(CREATE_NO_WINDOW)
+        .args(["-NonInteractive", "-NoProfile", "-Command", &script])
+        .output()
+    {
+        Ok(o) => o,
+        Err(_) => return, // can't query — leave task alone
+    };
+
+    let raw = String::from_utf8_lossy(&out.stdout);
+    let path_str = raw.trim().trim_matches('"');
+
+    // Empty → task doesn't exist, nothing to do.
+    if path_str.is_empty() {
+        return;
+    }
+
+    // Task exists. If the exe it points to is gone, it's an orphan — delete it.
+    if !std::path::Path::new(path_str).exists() {
+        let _ = delete_task();
+    }
+}
+
 fn delete_task() -> Result<(), String> {
     let script = format!(
         "if (Get-ScheduledTask -TaskName '{TASK_NAME}' -ErrorAction SilentlyContinue) {{\n    \
